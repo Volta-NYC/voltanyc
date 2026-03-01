@@ -7,7 +7,7 @@ import {
   Empty, StatCard, TagInput, useConfirm,
 } from "@/components/members/ui";
 import {
-  subscribeBusinesses, createBusiness, updateBusiness, deleteBusiness, type Business,
+  subscribeBusinesses, subscribeTeam, createBusiness, updateBusiness, deleteBusiness, type Business, type TeamMember,
 } from "@/lib/members/storage";
 import { useAuth } from "@/lib/members/authContext";
 
@@ -33,6 +33,7 @@ const BLANK_FORM: Omit<Business, "id" | "createdAt" | "updatedAt"> = {
 
 export default function BusinessesPage() {
   const [businesses, setBusinesses]           = useState<Business[]>([]);
+  const [team, setTeam]                       = useState<TeamMember[]>([]);
   const [search, setSearch]                   = useState("");
   const [filterDiv, setFilterDiv]             = useState("");
   const [modal, setModal]                     = useState<"create" | "edit" | null>(null);
@@ -44,6 +45,7 @@ export default function BusinessesPage() {
   const canEdit = authRole === "admin" || authRole === "project_lead";
 
   useEffect(() => subscribeBusinesses(setBusinesses), []);
+  useEffect(() => subscribeTeam(setTeam), []);
 
   const setField = (key: string, value: unknown) =>
     setForm(prev => ({ ...prev, [key]: value }));
@@ -98,6 +100,7 @@ export default function BusinessesPage() {
     const matchesDiv = !filterDiv || b.division === filterDiv;
     return matchesSearch && matchesDiv;
   });
+  const teamNameOptions = Array.from(new Set(team.map(member => member.name).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 
   return (
     <MembersLayout>
@@ -217,6 +220,25 @@ export default function BusinessesPage() {
               </div>
             )}
 
+            {/* Assigned members */}
+            <div className="border-t border-white/5 pt-2">
+              <p className="text-white/30 text-[10px] uppercase tracking-wider mb-1">Assigned Members</p>
+              {(b.teamMembers ?? []).length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {(b.teamMembers ?? []).map((member) => (
+                    <span
+                      key={member}
+                      className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border bg-[#85CC17]/15 text-[#85CC17] border-[#85CC17]/25"
+                    >
+                      {member}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-white/35 text-xs">No members assigned yet.</p>
+              )}
+            </div>
+
             {/* Actions */}
             {canEdit && (
               <div className="flex gap-2 pt-2 border-t border-white/5 mt-auto">
@@ -324,8 +346,8 @@ export default function BusinessesPage() {
             <Input type="date" value={form.nextStepDeadline ?? ""} onChange={e => setField("nextStepDeadline", e.target.value)} />
           </Field>
           <div className="col-span-2">
-            <Field label="Team Members">
-              <TagInput values={form.teamMembers ?? []} onChange={v => setField("teamMembers", v)} options={[]} />
+            <Field label="Assigned Members">
+              <TagInput values={form.teamMembers ?? []} onChange={v => setField("teamMembers", v)} options={teamNameOptions} />
             </Field>
           </div>
           <div className="col-span-2">
