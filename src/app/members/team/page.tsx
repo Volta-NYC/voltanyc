@@ -425,7 +425,7 @@ export default function TeamPage() {
             <Input value={form.school} onChange={e => setField("school", e.target.value)} />
           </Field>
           <Field label="Grade">
-            <Input value={form.grade ?? ""} onChange={e => setField("grade", e.target.value)} placeholder="e.g. 9, 10, 11, 12" />
+            <Input value={form.grade ?? ""} onChange={e => setField("grade", e.target.value)} />
           </Field>
         </div>
         <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-white/8">

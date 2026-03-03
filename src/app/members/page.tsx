@@ -11,7 +11,7 @@ export default function MembersIndex() {
     const auth = getAuth();
     if (!auth) { router.replace("/members/login"); return; }
     const unsub = onAuthStateChanged(auth, (user) => {
-      router.replace(user ? "/members/dashboard" : "/members/login");
+      router.replace(user ? "/members/projects" : "/members/login");
     });
     return unsub;
   }, [router]);

@@ -108,7 +108,7 @@ export default function SignupPage() {
       });
     } catch { /* non-fatal */ }
 
-    router.replace(inviteRole === "member" ? "/members/my-work" : "/members/dashboard");
+    router.replace("/members/projects");
   };
 
   return (

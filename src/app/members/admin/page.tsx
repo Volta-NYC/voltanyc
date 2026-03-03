@@ -331,7 +331,7 @@ function AdminContent() {
   // Redirect non-admins away from this page.
   useEffect(() => {
     if (!loading && authRole !== "admin") {
-      router.replace("/members/dashboard");
+      router.replace("/members/projects");
     }
   }, [authRole, loading, router]);
 

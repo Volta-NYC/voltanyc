@@ -5,8 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "@/lib/members/firebaseAuth";
-import { getDB } from "@/lib/firebase";
-import { ref, get } from "firebase/database";
 
 export default function MembersLogin() {
   const [email, setEmail] = useState("");
@@ -20,16 +18,8 @@ export default function MembersLogin() {
     setError("");
     setLoading(true);
     try {
-      const cred = await signIn(email.trim().toLowerCase(), password);
-      const db = getDB();
-      let role = "member";
-      if (db) {
-        const snap = await get(ref(db, `userProfiles/${cred.user.uid}/authRole`));
-        if (snap.exists()) role = snap.val();
-      }
-      // Always admin for designated email
-      if (email.trim().toLowerCase() === "ethan@voltanyc.org") role = "admin";
-      router.replace(role === "member" ? "/members/my-work" : "/members/dashboard");
+      await signIn(email.trim().toLowerCase(), password);
+      router.replace("/members/projects");
     } catch (err: unknown) {
       const msg = (err as { code?: string })?.code;
       if (msg === "auth/invalid-credential" || msg === "auth/wrong-password" || msg === "auth/user-not-found") {

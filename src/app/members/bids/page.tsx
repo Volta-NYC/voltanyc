@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import MembersLayout from "@/components/members/MembersLayout";
 import {
   PageHeader, SearchBar, Badge, Btn, Modal, Field, Input, Select, TextArea,
-  Table, Empty, StatCard, useConfirm,
+  Empty, StatCard, useConfirm,
 } from "@/components/members/ui";
 import {
   subscribeBIDs, createBID, updateBID, deleteBID,
@@ -34,14 +34,9 @@ export default function BIDTrackerPage() {
   const [modal, setModal]             = useState<"create" | "edit" | null>(null);
   const [editingBID, setEditingBID]   = useState<BID | null>(null);
   const [form, setForm]               = useState(BLANK_FORM);
-  const [sortCol, setSortCol]         = useState(1);
-  const [sortDir, setSortDir]         = useState<"asc" | "desc">("asc");
-
-  // Timeline entry form state
-  const [tlDate, setTlDate]   = useState(() => new Date().toISOString().split("T")[0]);
-  const [tlType, setTlType]   = useState("Email");
-  const [tlNote, setTlNote]   = useState("");
-  const [tlSaving, setTlSaving] = useState(false);
+  const [timelineDrafts, setTimelineDrafts] = useState<
+    Record<string, { date: string; type: string; note: string; saving: boolean }>
+  >({});
 
   const { ask, Dialog } = useConfirm();
   const { authRole }    = useAuth();
@@ -73,9 +68,6 @@ export default function BIDTrackerPage() {
       priority:     bid.priority as BID["priority"],
     });
     setEditingBID(bid);
-    setTlDate(new Date().toISOString().split("T")[0]);
-    setTlType("Email");
-    setTlNote("");
     setModal("edit");
   };
 
@@ -91,22 +83,41 @@ export default function BIDTrackerPage() {
 
   const handleDelete = (id: string) => ask(async () => deleteBID(id));
 
-  const handleAddTimeline = async () => {
-    if (!editingBID || !tlNote.trim()) return;
-    setTlSaving(true);
-    await addBIDTimelineEntry(editingBID.id, {
-      date: tlDate,
-      type: tlType,
-      note: tlNote.trim(),
-      createdAt: new Date().toISOString(),
-    });
-    setTlNote("");
-    setTlSaving(false);
+  const defaultTimelineDraft = () => ({
+    date: new Date().toISOString().split("T")[0],
+    type: "Email",
+    note: "",
+    saving: false,
+  });
+
+  const getTimelineDraft = (bidId: string) =>
+    timelineDrafts[bidId] ?? defaultTimelineDraft();
+
+  const setTimelineDraft = (
+    bidId: string,
+    patch: Partial<{ date: string; type: string; note: string; saving: boolean }>
+  ) => {
+    setTimelineDrafts((prev) => ({
+      ...prev,
+      [bidId]: { ...(prev[bidId] ?? defaultTimelineDraft()), ...patch },
+    }));
   };
 
-  const handleDeleteTimeline = (entryId: string) => {
-    if (!editingBID) return;
-    ask(async () => deleteBIDTimelineEntry(editingBID.id, entryId));
+  const handleAddTimeline = async (bidId: string) => {
+    const draft = getTimelineDraft(bidId);
+    if (!draft.note.trim()) return;
+    setTimelineDraft(bidId, { saving: true });
+    await addBIDTimelineEntry(bidId, {
+      date: draft.date,
+      type: draft.type,
+      note: draft.note.trim(),
+      createdAt: new Date().toISOString(),
+    });
+    setTimelineDraft(bidId, { note: "", saving: false });
+  };
+
+  const handleDeleteTimeline = (bidId: string, entryId: string) => {
+    ask(async () => deleteBIDTimelineEntry(bidId, entryId));
   };
 
   // Build timeline array from the nested Firebase object, newest first.
@@ -116,9 +127,6 @@ export default function BIDTrackerPage() {
       .map(([id, entry]) => ({ ...entry, id }))
       .sort((a, b) => b.date.localeCompare(a.date));
   };
-
-  // The editingBID from state is stale — get the live version from bids array.
-  const liveBID = editingBID ? bids.find(b => b.id === editingBID.id) ?? editingBID : null;
 
   // Filter by search text.
   const filtered = bids.filter((bid) => {
@@ -131,22 +139,12 @@ export default function BIDTrackerPage() {
 
   const PRIORITY_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
   const STATUS_ORDER: Record<string, number>   = { "Active Partner": 0, "In Conversation": 1, "Materials Sent": 2, "Cold Outreach": 3, "Paused": 4, "Dead": 5 };
-  const handleSort = (i: number) => {
-    if (sortCol === i) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortCol(i); setSortDir("asc"); }
-  };
   const sorted = [...filtered].sort((a, b) => {
-    let cmp = 0;
-    switch (sortCol) {
-      case 0: cmp = a.name.localeCompare(b.name); break;
-      case 1: cmp = (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3); break;
-      case 2: cmp = (a.borough || "").localeCompare(b.borough || ""); break;
-      case 3: cmp = (a.contactName || "").localeCompare(b.contactName || ""); break;
-      case 4: cmp = (a.nextAction || a.notes || "").localeCompare(b.nextAction || b.notes || ""); break;
-      case 5: cmp = (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1); break;
-      default: return 0;
-    }
-    return sortDir === "asc" ? cmp : -cmp;
+    const statusCmp = (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3);
+    if (statusCmp !== 0) return statusCmp;
+    const priorityCmp = (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1);
+    if (priorityCmp !== 0) return priorityCmp;
+    return a.name.localeCompare(b.name);
   });
 
   const stats = {
@@ -177,23 +175,124 @@ export default function BIDTrackerPage() {
         <SearchBar value={search} onChange={setSearch} placeholder="Search BIDs, boroughs…" />
       </div>
 
-      {/* BID list */}
-      <Table
-        cols={["BID Name", "Status", "Borough", "Contact", "Notes / Next Action", "Priority", "Actions"]}
-        sortCol={sortCol} sortDir={sortDir} onSort={handleSort} sortableCols={[0,1,2,3,4,5]}
-        rows={sorted.map(bid => [
-          <span key="name" className="text-white font-medium">{bid.name}</span>,
-          <Badge key="status" label={bid.status} />,
-          <span key="borough" className="text-white/50">{bid.borough || "—"}</span>,
-          <span key="contact" className="text-white/50">{bid.contactName || "—"}</span>,
-          <span key="notes" className="text-white/50 max-w-[200px] truncate block">{bid.nextAction || bid.notes || "—"}</span>,
-          <Badge key="priority" label={bid.priority} />,
-          <div key="actions" className="flex gap-2">
-            {canEdit && <Btn size="sm" variant="secondary" onClick={() => openEdit(bid)}>Edit</Btn>}
-            {canEdit && <Btn size="sm" variant="danger" onClick={() => handleDelete(bid.id)}>Delete</Btn>}
-          </div>,
-        ])}
-      />
+      {/* BID cards with inline timeline */}
+      <div className="space-y-4">
+        {sorted.map((bid) => {
+          const timeline = getTimeline(bid);
+          const draft = getTimelineDraft(bid.id);
+          return (
+            <div key={bid.id} className="bg-[#1C1F26] border border-white/8 rounded-xl p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1 min-w-0">
+                  <p className="text-white font-semibold truncate">{bid.name}</p>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-white/45">
+                    <span>{bid.borough || "No borough"}</span>
+                    <span>•</span>
+                    <span>{bid.contactName || "No contact"}</span>
+                    {bid.contactEmail && (
+                      <>
+                        <span>•</span>
+                        <a href={`mailto:${bid.contactEmail}`} className="text-[#85CC17]/75 hover:text-[#85CC17] transition-colors">
+                          {bid.contactEmail}
+                        </a>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge label={bid.status} />
+                  <Badge label={bid.priority} />
+                  {canEdit && <Btn size="sm" variant="secondary" onClick={() => openEdit(bid)}>Edit</Btn>}
+                  {canEdit && <Btn size="sm" variant="danger" onClick={() => handleDelete(bid.id)}>Delete</Btn>}
+                </div>
+              </div>
+
+              {(bid.nextAction || bid.notes) && (
+                <div className="mt-3 bg-white/4 border border-white/6 rounded-lg px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wider text-white/35 mb-1">Notes / Next Action</p>
+                  <p className="text-sm text-white/70">{bid.nextAction || bid.notes}</p>
+                </div>
+              )}
+
+              <div className="mt-3 border-t border-white/8 pt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs uppercase tracking-wider text-white/40 font-semibold">Activity Timeline</h3>
+                  <span className="text-[11px] text-white/35">{timeline.length} entries</span>
+                </div>
+
+                <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                  {timeline.length === 0 ? (
+                    <p className="text-xs text-white/30">No activity logged yet.</p>
+                  ) : (
+                    timeline.map((entry) => (
+                      <div key={entry.id} className="flex items-start gap-3 rounded-lg border border-white/7 bg-[#0F1014] px-3 py-2.5">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-[10px] font-medium text-white/45 uppercase tracking-wide bg-white/8 px-1.5 py-0.5 rounded">
+                              {entry.type}
+                            </span>
+                            <span className="text-[11px] text-white/30">{entry.date}</span>
+                          </div>
+                          <p className="text-sm text-white/70">{entry.note}</p>
+                        </div>
+                        {canEdit && (
+                          <button
+                            onClick={() => handleDeleteTimeline(bid.id, entry.id)}
+                            className="text-white/20 hover:text-red-400 transition-colors flex-shrink-0 mt-0.5"
+                            aria-label="Delete timeline entry"
+                          >
+                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {canEdit && (
+                  <div className="mt-3 rounded-xl border border-white/8 bg-[#141821] p-3 space-y-2">
+                    <p className="text-xs text-white/45">Log activity</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={draft.type}
+                        onChange={(e) => setTimelineDraft(bid.id, { type: e.target.value })}
+                        className="bg-[#0F1014] border border-white/10 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none"
+                      >
+                        {TIMELINE_TYPES.map((t) => (
+                          <option key={t}>{t}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="date"
+                        value={draft.date}
+                        onChange={(e) => setTimelineDraft(bid.id, { date: e.target.value })}
+                        className="bg-[#0F1014] border border-white/10 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none"
+                      />
+                    </div>
+                    <textarea
+                      value={draft.note}
+                      onChange={(e) => setTimelineDraft(bid.id, { note: e.target.value })}
+                      placeholder="What happened?"
+                      rows={2}
+                      className="w-full bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none resize-none font-body"
+                    />
+                    <Btn
+                      variant="primary"
+                      onClick={() => handleAddTimeline(bid.id)}
+                      disabled={draft.saving || !draft.note.trim()}
+                    >
+                      {draft.saving ? "Saving…" : "+ Log Entry"}
+                    </Btn>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
       {filtered.length === 0 && (
         <Empty
           message="No BIDs match your filters."
@@ -236,73 +335,6 @@ export default function BIDTrackerPage() {
             </div>
           </div>
 
-          {/* Timeline section — only shown when editing an existing BID */}
-          {modal === "edit" && (
-            <div className="border-t border-white/8 pt-4">
-              <h3 className="font-display font-bold text-white text-sm mb-3">Activity Timeline</h3>
-
-              {/* Existing timeline entries */}
-              <div className="space-y-2 mb-4">
-                {getTimeline(liveBID).length === 0 ? (
-                  <p className="text-white/25 text-xs font-body">No activity logged yet.</p>
-                ) : (
-                  getTimeline(liveBID).map(entry => (
-                    <div key={entry.id} className="flex items-start gap-3 bg-[#0F1014] border border-white/5 rounded-lg px-3 py-2.5">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-[10px] font-medium text-white/40 uppercase tracking-wider bg-white/8 px-1.5 py-0.5 rounded">{entry.type}</span>
-                          <span className="text-[11px] text-white/30 font-body">{entry.date}</span>
-                        </div>
-                        <p className="text-white/70 text-sm font-body">{entry.note}</p>
-                      </div>
-                      {canEdit && (
-                        <button
-                          onClick={() => handleDeleteTimeline(entry.id)}
-                          className="text-white/15 hover:text-red-400 transition-colors flex-shrink-0 mt-0.5"
-                        >
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Add new entry */}
-              {canEdit && (
-                <div className="bg-[#1C1F26] border border-white/8 rounded-xl p-3 space-y-2">
-                  <p className="text-white/40 text-xs font-body font-medium">Log activity</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <select
-                      value={tlType}
-                      onChange={e => setTlType(e.target.value)}
-                      className="bg-[#0F1014] border border-white/10 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none"
-                    >
-                      {TIMELINE_TYPES.map(t => <option key={t}>{t}</option>)}
-                    </select>
-                    <input
-                      type="date"
-                      value={tlDate}
-                      onChange={e => setTlDate(e.target.value)}
-                      className="bg-[#0F1014] border border-white/10 rounded-lg px-2.5 py-2 text-sm text-white focus:outline-none"
-                    />
-                  </div>
-                  <textarea
-                    value={tlNote}
-                    onChange={e => setTlNote(e.target.value)}
-                    placeholder="What happened? (e.g. Sent intro email, Completed tour of district…)"
-                    rows={2}
-                    className="w-full bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none resize-none font-body"
-                  />
-                  <Btn variant="primary" onClick={handleAddTimeline} disabled={tlSaving || !tlNote.trim()}>
-                    {tlSaving ? "Saving…" : "+ Log Entry"}
-                  </Btn>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-white/8">

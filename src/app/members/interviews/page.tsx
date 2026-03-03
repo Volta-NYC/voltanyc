@@ -114,7 +114,7 @@ function InterviewsContent() {
 
   useEffect(() => {
     if (!loading && authRole !== "admin" && authRole !== "project_lead") {
-      router.replace("/members/dashboard");
+      router.replace("/members/projects");
     }
   }, [authRole, loading, router]);
 
@@ -523,6 +523,9 @@ function InterviewsContent() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <Btn variant="secondary" size="sm" onClick={() => setEditingZoom(true)}>
+                  Edit
+                </Btn>
                 <Btn variant="secondary" size="sm" onClick={copyZoomLink} disabled={!effectiveZoomLink}>
                   {copiedZoom ? "Copied!" : "Copy Link"}
                 </Btn>
@@ -538,9 +541,6 @@ function InterviewsContent() {
                 >
                   Join
                 </a>
-                <Btn variant="secondary" size="sm" onClick={() => setEditingZoom(true)}>
-                  Edit
-                </Btn>
               </div>
             </div>
 

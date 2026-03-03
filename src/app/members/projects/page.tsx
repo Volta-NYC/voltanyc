@@ -42,7 +42,7 @@ export default function BusinessesPage() {
   const [form, setForm]                       = useState(BLANK_FORM);
 
   const { ask, Dialog } = useConfirm();
-  const { authRole }    = useAuth();
+  const { authRole, user, userProfile } = useAuth();
   const canEdit = authRole === "admin" || authRole === "project_lead";
 
   useEffect(() => subscribeBusinesses(setBusinesses), []);
@@ -136,6 +136,139 @@ export default function BusinessesPage() {
   const completedCount = businesses.filter((b) => b.projectStatus === "Complete").length;
   const scoutingCount = businesses.filter((b) => b.projectStatus === "Discovery" || b.projectStatus === "On Hold").length;
 
+  const normalize = (v: string) => v.trim().toLowerCase();
+  const myEmail = normalize(userProfile?.email ?? user?.email ?? "");
+  const teamMatchByEmail = myEmail ? team.find((m) => normalize(m.email ?? "") === myEmail) : undefined;
+  const myNameSet = new Set(
+    [userProfile?.name, teamMatchByEmail?.name]
+      .map((v) => normalize(v ?? ""))
+      .filter(Boolean)
+  );
+
+  const isProjectMine = (project: Business) => {
+    if (myNameSet.size === 0) return false;
+    const leadKey = normalize(project.teamLead ?? "");
+    if (leadKey && myNameSet.has(leadKey)) return true;
+    return (project.teamMembers ?? []).some((member) => myNameSet.has(normalize(member)));
+  };
+
+  const isNonAdminMember = authRole !== "admin";
+  const myProjects = isNonAdminMember ? filtered.filter(isProjectMine) : [];
+  const otherProjects = isNonAdminMember ? filtered.filter((p) => !isProjectMine(p)) : filtered;
+
+  const renderProjectCard = (b: Business) => (
+    <div key={b.id} className="bg-[#1C1F26] border border-white/8 rounded-xl p-5 hover:border-white/15 transition-all flex flex-col gap-3">
+
+      {/* Name + badges */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-white font-bold text-base leading-tight">{b.name}</p>
+          {b.businessType && <p className="text-white/40 text-xs mt-0.5">{b.businessType}</p>}
+        </div>
+        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+          <Badge label={b.projectStatus} />
+          {b.division && (
+            <span className="text-[10px] font-medium text-white/60 bg-white/8 px-2 py-0.5 rounded-full">{b.division}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Contact info */}
+      {(b.ownerName || b.ownerEmail || b.phone || b.website) && (
+        <div className="bg-white/4 rounded-lg px-3 py-2 space-y-1">
+          {b.ownerName && (
+            <p className="text-white/70 text-xs font-medium">{b.ownerName}</p>
+          )}
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+            {b.ownerEmail && (
+              <a href={`mailto:${b.ownerEmail}`} className="text-[#85CC17]/70 hover:text-[#85CC17] text-xs font-mono transition-colors">{b.ownerEmail}</a>
+            )}
+            {b.phone && (
+              <span className="text-white/40 text-xs">{b.phone}</span>
+            )}
+          </div>
+          {b.website && (
+            <a href={b.website} target="_blank" rel="noopener noreferrer" className="text-blue-400/70 hover:text-blue-400 text-xs font-mono transition-colors truncate block">{b.website}</a>
+          )}
+        </div>
+      )}
+
+      {/* GitHub / Drive link */}
+      {b.division === "Tech" && b.githubUrl && (
+        <a href={b.githubUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors">
+          <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.49.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.15-1.11-1.46-1.11-1.46-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.58 9.58 0 0 1 12 6.8c.85 0 1.71.11 2.51.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10.01 10.01 0 0 0 22 12c0-5.52-4.48-10-10-10z"/>
+          </svg>
+          <span className="truncate">GitHub</span>
+        </a>
+      )}
+      {b.division !== "Tech" && b.driveFolderUrl && (
+        <a href={b.driveFolderUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors">
+          <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span className="truncate">Drive Folder</span>
+        </a>
+      )}
+
+      {/* Dates */}
+      {(b.startDate || b.targetEndDate) && (
+        <div className="flex gap-4 text-xs">
+          {b.startDate && (
+            <div>
+              <span className="text-white/30 block">Start</span>
+              <span className="text-white/60">{b.startDate}</span>
+            </div>
+          )}
+          {b.targetEndDate && (
+            <div>
+              <span className="text-white/30 block">Target End</span>
+              <span className="text-white/60">{b.targetEndDate}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Next step */}
+      {(b.nextStep || b.nextStepDeadline) && (
+        <div className="border-l-2 border-[#85CC17]/40 pl-3">
+          <p className="text-white/30 text-[10px] uppercase tracking-wider mb-0.5">Next Step</p>
+          {b.nextStep && <p className="text-white/70 text-xs">{b.nextStep}</p>}
+          {b.nextStepDeadline && (
+            <p className="text-[#85CC17]/60 text-[10px] mt-0.5">Due {b.nextStepDeadline}</p>
+          )}
+        </div>
+      )}
+
+      {/* Assigned members */}
+      <div className="border-t border-white/5 pt-2">
+        <p className="text-white/30 text-[10px] uppercase tracking-wider mb-1">Assigned Members</p>
+        {(b.teamMembers ?? []).length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {(b.teamMembers ?? []).map((member) => (
+              <span
+                key={member}
+                className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border bg-[#85CC17]/15 text-[#85CC17] border-[#85CC17]/25"
+              >
+                {member}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-white/35 text-xs">No members assigned yet.</p>
+        )}
+      </div>
+
+      {/* Actions */}
+      {canEdit && (
+        <div className="flex gap-2 pt-2 border-t border-white/5 mt-auto">
+          <Btn size="sm" variant="secondary" className="flex-1 justify-center" onClick={() => openEdit(b)}>Edit</Btn>
+          <Btn size="sm" variant="danger" onClick={() => ask(async () => deleteBusiness(b.id))}>Delete</Btn>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <MembersLayout>
       <Dialog />
@@ -186,120 +319,21 @@ export default function BusinessesPage() {
         </select>
       </div>
 
-      {/* Project cards */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        {filtered.map(b => (
-          <div key={b.id} className="bg-[#1C1F26] border border-white/8 rounded-xl p-5 hover:border-white/15 transition-all flex flex-col gap-3">
-
-            {/* Name + badges */}
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <p className="text-white font-bold text-base leading-tight">{b.name}</p>
-                {b.businessType && <p className="text-white/40 text-xs mt-0.5">{b.businessType}</p>}
-              </div>
-              <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                <Badge label={b.projectStatus} />
-                {b.division && (
-                  <span className="text-[10px] font-medium text-white/60 bg-white/8 px-2 py-0.5 rounded-full">{b.division}</span>
-                )}
-              </div>
-            </div>
-
-            {/* Contact info */}
-            {(b.ownerName || b.ownerEmail || b.phone || b.website) && (
-              <div className="bg-white/4 rounded-lg px-3 py-2 space-y-1">
-                {b.ownerName && (
-                  <p className="text-white/70 text-xs font-medium">{b.ownerName}</p>
-                )}
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                  {b.ownerEmail && (
-                    <a href={`mailto:${b.ownerEmail}`} className="text-[#85CC17]/70 hover:text-[#85CC17] text-xs font-mono transition-colors">{b.ownerEmail}</a>
-                  )}
-                  {b.phone && (
-                    <span className="text-white/40 text-xs">{b.phone}</span>
-                  )}
-                </div>
-                {b.website && (
-                  <a href={b.website} target="_blank" rel="noopener noreferrer" className="text-blue-400/70 hover:text-blue-400 text-xs font-mono transition-colors truncate block">{b.website}</a>
-                )}
-              </div>
-            )}
-
-            {/* GitHub / Drive link */}
-            {b.division === "Tech" && b.githubUrl && (
-              <a href={b.githubUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors">
-                <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.49.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.15-1.11-1.46-1.11-1.46-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.58 9.58 0 0 1 12 6.8c.85 0 1.71.11 2.51.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10.01 10.01 0 0 0 22 12c0-5.52-4.48-10-10-10z"/>
-                </svg>
-                <span className="truncate">GitHub</span>
-              </a>
-            )}
-            {b.division !== "Tech" && b.driveFolderUrl && (
-              <a href={b.driveFolderUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors">
-                <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                </svg>
-                <span className="truncate">Drive Folder</span>
-              </a>
-            )}
-
-            {/* Dates */}
-            {(b.startDate || b.targetEndDate) && (
-              <div className="flex gap-4 text-xs">
-                {b.startDate && (
-                  <div>
-                    <span className="text-white/30 block">Start</span>
-                    <span className="text-white/60">{b.startDate}</span>
-                  </div>
-                )}
-                {b.targetEndDate && (
-                  <div>
-                    <span className="text-white/30 block">Target End</span>
-                    <span className="text-white/60">{b.targetEndDate}</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Next step */}
-            {(b.nextStep || b.nextStepDeadline) && (
-              <div className="border-l-2 border-[#85CC17]/40 pl-3">
-                <p className="text-white/30 text-[10px] uppercase tracking-wider mb-0.5">Next Step</p>
-                {b.nextStep && <p className="text-white/70 text-xs">{b.nextStep}</p>}
-                {b.nextStepDeadline && (
-                  <p className="text-[#85CC17]/60 text-[10px] mt-0.5">Due {b.nextStepDeadline}</p>
-                )}
-              </div>
-            )}
-
-            {/* Assigned members */}
-            <div className="border-t border-white/5 pt-2">
-              <p className="text-white/30 text-[10px] uppercase tracking-wider mb-1">Assigned Members</p>
-              {(b.teamMembers ?? []).length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {(b.teamMembers ?? []).map((member) => (
-                    <span
-                      key={member}
-                      className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border bg-[#85CC17]/15 text-[#85CC17] border-[#85CC17]/25"
-                    >
-                      {member}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-white/35 text-xs">No members assigned yet.</p>
-              )}
-            </div>
-
-            {/* Actions */}
-            {canEdit && (
-              <div className="flex gap-2 pt-2 border-t border-white/5 mt-auto">
-                <Btn size="sm" variant="secondary" className="flex-1 justify-center" onClick={() => openEdit(b)}>Edit</Btn>
-                <Btn size="sm" variant="danger" onClick={() => ask(async () => deleteBusiness(b.id))}>Delete</Btn>
-              </div>
-            )}
+      {isNonAdminMember && myProjects.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-white/75 text-sm font-semibold uppercase tracking-wider mb-3">My Projects</h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {myProjects.map(renderProjectCard)}
           </div>
-        ))}
+        </div>
+      )}
+
+      {/* Project cards */}
+      {isNonAdminMember && myProjects.length > 0 && (
+        <h2 className="text-white/65 text-sm font-semibold uppercase tracking-wider mb-3">Other Projects</h2>
+      )}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        {otherProjects.map(renderProjectCard)}
         {filtered.length === 0 && (
           <div className="col-span-3">
             <Empty

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import MembersLayout from "@/components/members/MembersLayout";
 import {
   PageHeader, SearchBar, Badge, Btn, Modal, Field, Input, Select, TextArea,
@@ -51,7 +52,12 @@ export default function TasksPage() {
 
   const { ask, Dialog } = useConfirm();
   const { authRole }    = useAuth();
-  const canEdit = authRole === "admin" || authRole === "project_lead";
+  const router = useRouter();
+  const canEdit = authRole === "admin";
+
+  useEffect(() => {
+    if (authRole && authRole !== "admin") router.replace("/members/projects");
+  }, [authRole, router]);
 
   // Subscribe to real-time task updates; unsubscribe on unmount.
   useEffect(() => subscribeTasks(setTasks), []);
@@ -122,6 +128,16 @@ export default function TasksPage() {
     }
     return sortDir === "asc" ? cmp : -cmp;
   });
+
+  if (authRole && authRole !== "admin") {
+    return (
+      <MembersLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="w-6 h-6 border-2 border-[#85CC17]/30 border-t-[#85CC17] rounded-full animate-spin" />
+        </div>
+      </MembersLayout>
+    );
+  }
 
   return (
     <MembersLayout>
