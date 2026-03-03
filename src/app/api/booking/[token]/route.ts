@@ -49,6 +49,37 @@ async function dbPatch(path: string, data: Record<string, unknown>): Promise<voi
   if (!res.ok) throw new Error("db_write_failed");
 }
 
+async function dbPush(path: string, data: Record<string, unknown>): Promise<void> {
+  const db = getAdminDB();
+  if (db) {
+    await db.ref(path).push(data);
+    return;
+  }
+  if (!DB_URL) throw new Error("no_db");
+  const res = await fetch(`${DB_URL}/${path}.json`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("db_write_failed");
+}
+
+async function writeAuditLog(entry: {
+  action: "update";
+  collection: string;
+  recordId: string;
+  actorUid: string;
+  actorEmail: string;
+  actorName?: string;
+  details?: Record<string, unknown>;
+}): Promise<void> {
+  await dbPush("auditLogs", {
+    timestamp: new Date().toISOString(),
+    ...entry,
+  });
+}
+
 // ── GET /api/booking/[token] ──────────────────────────────────────────────────
 // Returns { invite, slots, zoomLink } for a valid, unexpired booking token.
 
@@ -74,7 +105,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
 
   if (Date.now() > (invite["expiresAt"] as number)) {
-    await dbPatch(`interviewInvites/${token}`, { status: "expired" }).catch(() => {});
+    await dbPatch(`interviewInvites/${token}`, { status: "expired" })
+      .then(() => writeAuditLog({
+        action: "update",
+        collection: "interviewInvites",
+        recordId: token,
+        actorUid: "system",
+        actorEmail: "system",
+        details: { status: "expired", reason: "invite_expired_on_read" },
+      }))
+      .catch(() => {});
     return NextResponse.json({ error: "expired" }, { status: 410 });
   }
 
@@ -149,12 +189,30 @@ export async function POST(req: NextRequest, { params }: Params) {
       bookerName:  bookerName || "",
       bookerEmail: bookerEmail || "",
     });
+    await writeAuditLog({
+      action: "update",
+      collection: "interviewSlots",
+      recordId: slotId,
+      actorUid: `public:${token}`,
+      actorEmail: (bookerEmail || "").trim().toLowerCase() || "public",
+      actorName: bookerName || "",
+      details: { bookedBy: token, available: false },
+    }).catch(() => {});
 
     if (!invite.multiUse) {
       await dbPatch(`interviewInvites/${token}`, {
         status:       "booked",
         bookedSlotId: slotId,
       });
+      await writeAuditLog({
+        action: "update",
+        collection: "interviewInvites",
+        recordId: token,
+        actorUid: `public:${token}`,
+        actorEmail: (bookerEmail || "").trim().toLowerCase() || "public",
+        actorName: bookerName || "",
+        details: { status: "booked", bookedSlotId: slotId },
+      }).catch(() => {});
     }
   } catch {
     return NextResponse.json({ error: "server_error" }, { status: 500 });

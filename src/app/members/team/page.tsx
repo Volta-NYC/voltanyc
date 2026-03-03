@@ -16,7 +16,7 @@ import { useAuth } from "@/lib/members/authContext";
 const BLANK_FORM: Omit<TeamMember, "id" | "createdAt"> = {
   grade: "",
   name: "", school: "", divisions: [], pod: "", role: "Member", slackHandle: "",
-  email: "", status: "Active", skills: [], joinDate: "", notes: "",
+  email: "", alternateEmail: "", status: "Active", skills: [], joinDate: "", notes: "",
 };
 
 type ImportedMember = {
@@ -182,8 +182,10 @@ export default function TeamPage() {
 
       for (const member of team) {
         const memberEmailKey = normalizeKey(member.email ?? "");
+        const memberAltEmailKey = normalizeKey(member.alternateEmail ?? "");
         const memberNameKey = normalizeKey(member.name ?? "");
         if (memberEmailKey) existingByEmail.set(memberEmailKey, member);
+        if (memberAltEmailKey) existingByEmail.set(memberAltEmailKey, member);
         if (memberNameKey) {
           const arr = existingByName.get(memberNameKey) ?? [];
           arr.push(member);
@@ -229,7 +231,16 @@ export default function TeamPage() {
         if (target) {
           const patch: Partial<TeamMember> = {};
           if (entry.name && entry.name !== target.name) patch.name = entry.name;
-          if (entry.email && entry.email !== target.email) patch.email = entry.email;
+          if (entry.email) {
+            const entryEmailKey = normalizeKey(entry.email);
+            const primaryEmailKey = normalizeKey(target.email ?? "");
+            const altEmailKey = normalizeKey(target.alternateEmail ?? "");
+            if (entryEmailKey !== primaryEmailKey && entryEmailKey !== altEmailKey) {
+              if (!target.email) patch.email = entry.email;
+              else if (!target.alternateEmail) patch.alternateEmail = entry.email;
+              else patch.email = entry.email;
+            }
+          }
           if (entry.school && entry.school !== target.school) patch.school = entry.school;
           if (entry.grade && entry.grade !== (target.grade ?? "")) patch.grade = entry.grade;
           if (Object.keys(patch).length > 0) {
@@ -237,6 +248,9 @@ export default function TeamPage() {
             await updateTeamMember(target.id, patch);
             if (patch.email) {
               existingByEmail.set(normalizeKey(patch.email), { ...target, ...patch } as TeamMember);
+            }
+            if (patch.alternateEmail) {
+              existingByEmail.set(normalizeKey(patch.alternateEmail), { ...target, ...patch } as TeamMember);
             }
             updated += 1;
           } else {
@@ -249,6 +263,7 @@ export default function TeamPage() {
         await createTeamMember({
           name: entry.name,
           email: entry.email,
+          alternateEmail: "",
           school: entry.school,
           grade: entry.grade,
           divisions: [],
@@ -291,6 +306,7 @@ export default function TeamPage() {
       role:        member.role,
       slackHandle: member.slackHandle,
       email:       member.email,
+      alternateEmail: member.alternateEmail ?? "",
       status:      member.status,
       skills:      member.skills ?? [],
       joinDate:    member.joinDate,
@@ -315,6 +331,7 @@ export default function TeamPage() {
     const matchesSearch = !search
       || member.name.toLowerCase().includes(search.toLowerCase())
       || member.email.toLowerCase().includes(search.toLowerCase())
+      || (member.alternateEmail ?? "").toLowerCase().includes(search.toLowerCase())
       || member.school.toLowerCase().includes(search.toLowerCase())
       || (member.grade ?? "").toLowerCase().includes(search.toLowerCase());
     return matchesSearch;
@@ -383,7 +400,12 @@ export default function TeamPage() {
               </div>
               <span className="text-white font-medium">{member.name}</span>
             </div>,
-            <span key="email" className="text-white/50 font-mono text-xs">{member.email || "—"}</span>,
+            <div key="email" className="text-xs font-mono">
+              <p className="text-white/50">{member.email || "—"}</p>
+              {member.alternateEmail && (
+                <p className="text-white/30">Alt: {member.alternateEmail}</p>
+              )}
+            </div>,
             <span key="school" className="text-white/50">{member.school || "—"}</span>,
             <span key="grade" className="text-white/50">{member.grade || "—"}</span>,
             <div key="actions" className="flex gap-2">
@@ -408,6 +430,9 @@ export default function TeamPage() {
           </Field>
           <Field label="Email">
             <Input type="email" value={form.email} onChange={e => setField("email", e.target.value)} />
+          </Field>
+          <Field label="Alternate Email">
+            <Input type="email" value={form.alternateEmail ?? ""} onChange={e => setField("alternateEmail", e.target.value)} />
           </Field>
           <Field label="School">
             <Input value={form.school} onChange={e => setField("school", e.target.value)} />

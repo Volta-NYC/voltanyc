@@ -5,10 +5,10 @@ import MembersLayout from "@/components/members/MembersLayout";
 import { useAuth } from "@/lib/members/authContext";
 import {
   subscribeInviteCodes, createInviteCode, deleteInviteCode,
-  subscribeUserProfiles, updateUserProfile, deleteUserProfile,
-  getUserProfilesList, getTeamMembersList, createTeamMember,
-  exportAllData, importAllData,
-  type InviteCode, type UserProfile, type AuthRole,
+  subscribeUserProfiles, updateUserProfile, deletePortalUserAccount,
+  subscribeAuditLogs,
+  exportAllData,
+  type InviteCode, type UserProfile, type AuthRole, type AuditLogEntry,
 } from "@/lib/members/storage";
 import { Btn, Badge, Table, Field, Select, useConfirm } from "@/components/members/ui";
 import { useRouter } from "next/navigation";
@@ -146,8 +146,8 @@ function UsersTab() {
 
   const handleDelete = (user: UserProfile) => {
     ask(
-      async () => deleteUserProfile(user.id),
-      `Delete ${user.email}? This removes them from the portal database. Their Firebase login still exists — if they sign in again they'll be recreated as a plain member. Disable the account instead to block access without deleting.`
+      async () => deletePortalUserAccount(user.id),
+      `Delete ${user.email}? This removes both the Firebase Auth account and the portal user profile. They will not be able to sign in again unless a new account is created.`
     );
   };
 
@@ -199,8 +199,6 @@ function UsersTab() {
 
 function DataTab() {
   const [statusMessage, setStatusMessage] = useState("");
-  const [isImporting, setIsImporting]     = useState(false);
-  const [isSyncing, setIsSyncing]         = useState(false);
 
   const handleExport = async () => {
     setStatusMessage("Exporting…");
@@ -215,81 +213,8 @@ function DataTab() {
     setStatusMessage("Export complete.");
   };
 
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsImporting(true);
-    setStatusMessage("Reading file…");
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      try {
-        await importAllData(ev.target?.result as string);
-        setStatusMessage("Import complete. Data is now live for everyone.");
-      } catch {
-        setStatusMessage("Import failed — check that the file is valid JSON from a Volta export.");
-      } finally {
-        setIsImporting(false);
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const handleSync = async () => {
-    setIsSyncing(true);
-    setStatusMessage("Checking for missing team entries…");
-    try {
-      const [profiles, teamMembers] = await Promise.all([
-        getUserProfilesList(),
-        getTeamMembersList(),
-      ]);
-      const teamEmails = new Set(teamMembers.map(t => t.email.trim().toLowerCase()));
-      const missing = profiles.filter(p => !teamEmails.has(p.email.trim().toLowerCase()));
-      if (missing.length === 0) {
-        setStatusMessage("All users already have a team entry — nothing to sync.");
-      } else {
-        await Promise.all(
-          missing.map(user =>
-            createTeamMember({
-              name:        user.name ?? user.email,
-              email:       user.email.trim().toLowerCase(),
-              role:        user.authRole === "project_lead" ? "Team Lead" : "Member",
-              status:      "Active",
-              joinDate:    user.createdAt?.split("T")[0] ?? new Date().toISOString().split("T")[0],
-              school:      "",
-              divisions:   [],
-              pod:         "",
-              slackHandle: "",
-              skills:      [],
-              notes:       "",
-            })
-          )
-        );
-        setStatusMessage(`Done — added ${missing.length} team ${missing.length === 1 ? "entry" : "entries"}: ${missing.map(u => u.name ?? u.email).join(", ")}.`);
-      }
-    } catch {
-      setStatusMessage("Sync failed — check your connection and try again.");
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
   return (
     <div className="max-w-lg space-y-4">
-      {/* Sync users → team */}
-      <div className="bg-[#1C1F26] border border-white/8 rounded-xl p-5">
-        <h2 className="font-display font-bold text-white mb-1">Sync Users to Team</h2>
-        <p className="text-white/40 text-sm mb-4">
-          Creates a Team tab entry for any portal user who doesn&apos;t already have one.
-          Safe to run multiple times — existing entries are never overwritten.
-        </p>
-        <button
-          onClick={handleSync}
-          disabled={isSyncing}
-          className="bg-[#3B74ED] text-white font-display font-bold px-5 py-2.5 rounded-xl hover:bg-[#2B62D9] transition-colors text-sm disabled:opacity-60"
-        >
-          {isSyncing ? "Syncing…" : "Sync Now"}
-        </button>
-      </div>
       <div className="bg-[#1C1F26] border border-white/8 rounded-xl p-5">
         <h2 className="font-display font-bold text-white mb-1">Export Data</h2>
         <p className="text-white/40 text-sm mb-4">Download a JSON backup of all portal data.</p>
@@ -300,20 +225,49 @@ function DataTab() {
           Download Backup
         </button>
       </div>
-      <div className="bg-[#1C1F26] border border-white/8 rounded-xl p-5">
-        <h2 className="font-display font-bold text-white mb-1">Import Data</h2>
-        <p className="text-white/40 text-sm mb-4">
-          <strong className="text-orange-400">Warning:</strong> This overwrites all existing data.
-        </p>
-        <label className={`inline-block bg-white/8 border border-white/15 text-white/70 font-body text-sm px-5 py-2.5 rounded-xl cursor-pointer hover:bg-white/12 transition-colors ${isImporting ? "opacity-50 pointer-events-none" : ""}`}>
-          {isImporting ? "Importing…" : "Choose Backup File"}
-          <input type="file" accept=".json" onChange={handleImport} className="hidden" />
-        </label>
-      </div>
       {statusMessage && (
         <div className="bg-white/5 border border-white/8 rounded-xl px-4 py-3 text-white/60 text-sm font-body">
           {statusMessage}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ── TAB: AUDIT LOG ────────────────────────────────────────────────────────────
+
+function AuditLogTab() {
+  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
+
+  useEffect(() => subscribeAuditLogs(setLogs), []);
+
+  const sortedLogs = [...logs]
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, 250);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-white/45 text-sm font-body">
+        Latest 250 database changes with actor attribution.
+      </p>
+      <Table
+        cols={["Time", "Action", "Collection", "Record", "Actor", "Details"]}
+        rows={sortedLogs.map((log) => [
+          <span key="time" className="text-white/40 text-xs">{log.timestamp.replace("T", " ").slice(0, 19)}</span>,
+          <Badge key="action" label={log.action} />,
+          <span key="collection" className="text-white/70 text-xs">{log.collection}</span>,
+          <span key="record" className="text-white/40 text-xs font-mono">{log.recordId || "—"}</span>,
+          <div key="actor" className="text-xs">
+            <p className="text-white/60 font-mono">{log.actorEmail || "unknown"}</p>
+            <p className="text-white/30">{log.actorUid || "unknown"}</p>
+          </div>,
+          <span key="details" className="text-white/35 text-xs">
+            {log.details ? JSON.stringify(log.details) : "—"}
+          </span>,
+        ])}
+      />
+      {sortedLogs.length === 0 && (
+        <p className="text-white/30 text-sm text-center py-6 font-body">No audit entries yet.</p>
       )}
     </div>
   );
@@ -324,7 +278,7 @@ function DataTab() {
 // the page root, which is outside it.
 
 function AdminContent() {
-  const [activeTab, setActiveTab] = useState<"codes" | "users" | "data">("codes");
+  const [activeTab, setActiveTab] = useState<"codes" | "users" | "data" | "audit">("codes");
   const { user, authRole, loading } = useAuth();
   const router = useRouter();
 
@@ -346,6 +300,7 @@ function AdminContent() {
   const TABS: { key: typeof activeTab; label: string }[] = [
     { key: "codes", label: "Access Codes" },
     { key: "users", label: "Users" },
+    { key: "audit", label: "Audit Log" },
     { key: "data",  label: "Data" },
   ];
 
@@ -373,6 +328,7 @@ function AdminContent() {
 
       {activeTab === "codes" && <AccessCodesTab uid={user?.uid ?? ""} />}
       {activeTab === "users" && <UsersTab />}
+      {activeTab === "audit" && <AuditLogTab />}
       {activeTab === "data"  && <DataTab />}
     </>
   );

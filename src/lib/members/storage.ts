@@ -7,7 +7,7 @@
 // to avoid "Cannot read properties of undefined" crashes.
 
 import { ref, push, update, remove, onValue, get, set, off } from "firebase/database";
-import { getDB } from "@/lib/firebase";
+import { getDB, getAuth } from "@/lib/firebase";
 
 // ── DATA TYPES ────────────────────────────────────────────────────────────────
 
@@ -106,6 +106,7 @@ export interface TeamMember {
   role: "Team Lead" | "Member" | "Associate" | "Advisor";
   slackHandle: string;
   email: string;
+  alternateEmail?: string;
   status: "Active" | "On Leave" | "Alumni" | "Inactive";
   skills: string[];       // may be undefined if Firebase omitted empty array
   joinDate: string;
@@ -211,11 +212,52 @@ export interface InterviewSettings {
   updatedBy?: string;
 }
 
+export type AuditAction = "create" | "update" | "delete" | "import";
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  action: AuditAction;
+  collection: string;
+  recordId?: string;
+  actorUid: string;
+  actorEmail: string;
+  actorName?: string;
+  details?: Record<string, unknown>;
+}
+
 // ── INTERNAL HELPERS ──────────────────────────────────────────────────────────
 
 // Returns the current time as an ISO string, used for createdAt / updatedAt fields.
 function nowISO(): string {
   return new Date().toISOString();
+}
+
+function getAuditActor() {
+  const auth = getAuth();
+  const user = auth?.currentUser;
+  return {
+    actorUid: user?.uid ?? "unknown",
+    actorEmail: user?.email ?? "unknown",
+    actorName: user?.displayName ?? "",
+  };
+}
+
+async function writeAuditLog(
+  db: NonNullable<ReturnType<typeof getDB>>,
+  entry: Omit<AuditLogEntry, "id" | "timestamp" | "actorUid" | "actorEmail" | "actorName">
+): Promise<void> {
+  try {
+    const actor = getAuditActor();
+    await push(ref(db, "auditLogs"), {
+      timestamp: nowISO(),
+      ...actor,
+      ...entry,
+    });
+  } catch (err) {
+    // Do not block primary writes if audit logging fails.
+    console.error("Audit log write failed:", err);
+  }
 }
 
 // Converts a Firebase snapshot object into a typed array.
@@ -250,25 +292,44 @@ export const subscribeTasks       = makeSubscriber<Task>("tasks");
 export const subscribeGrants      = makeSubscriber<Grant>("grants");
 export const subscribeTeam        = makeSubscriber<TeamMember>("team");
 export const subscribeProjects    = makeSubscriber<Project>("projects");
+export const subscribeAuditLogs   = makeSubscriber<AuditLogEntry>("auditLogs");
 
 // ── BIDs ──────────────────────────────────────────────────────────────────────
 
 export async function createBID(data: Omit<BID, "id" | "createdAt" | "updatedAt">): Promise<void> {
   const db = getDB();
   if (!db) return;
-  await push(ref(db, "bids"), { ...data, createdAt: nowISO(), updatedAt: nowISO() });
+  const bidRef = push(ref(db, "bids"));
+  await set(bidRef, { ...data, createdAt: nowISO(), updatedAt: nowISO() });
+  await writeAuditLog(db, {
+    action: "create",
+    collection: "bids",
+    recordId: bidRef.key ?? "",
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function updateBID(id: string, data: Partial<BID>): Promise<void> {
   const db = getDB();
   if (!db) return;
   await update(ref(db, `bids/${id}`), { ...data, updatedAt: nowISO() });
+  await writeAuditLog(db, {
+    action: "update",
+    collection: "bids",
+    recordId: id,
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function deleteBID(id: string): Promise<void> {
   const db = getDB();
   if (!db) return;
   await remove(ref(db, `bids/${id}`));
+  await writeAuditLog(db, {
+    action: "delete",
+    collection: "bids",
+    recordId: id,
+  });
 }
 
 export async function addBIDTimelineEntry(
@@ -277,13 +338,25 @@ export async function addBIDTimelineEntry(
 ): Promise<void> {
   const db = getDB();
   if (!db) return;
-  await push(ref(db, `bids/${bidId}/timeline`), entry);
+  const tlRef = push(ref(db, `bids/${bidId}/timeline`));
+  await set(tlRef, entry);
+  await writeAuditLog(db, {
+    action: "create",
+    collection: "bids.timeline",
+    recordId: `${bidId}/${tlRef.key ?? ""}`,
+    details: { type: entry.type, date: entry.date },
+  });
 }
 
 export async function deleteBIDTimelineEntry(bidId: string, entryId: string): Promise<void> {
   const db = getDB();
   if (!db) return;
   await remove(ref(db, `bids/${bidId}/timeline/${entryId}`));
+  await writeAuditLog(db, {
+    action: "delete",
+    collection: "bids.timeline",
+    recordId: `${bidId}/${entryId}`,
+  });
 }
 
 // ── Businesses ────────────────────────────────────────────────────────────────
@@ -291,19 +364,37 @@ export async function deleteBIDTimelineEntry(bidId: string, entryId: string): Pr
 export async function createBusiness(data: Omit<Business, "id" | "createdAt" | "updatedAt">): Promise<void> {
   const db = getDB();
   if (!db) return;
-  await push(ref(db, "businesses"), { ...data, createdAt: nowISO(), updatedAt: nowISO() });
+  const businessRef = push(ref(db, "businesses"));
+  await set(businessRef, { ...data, createdAt: nowISO(), updatedAt: nowISO() });
+  await writeAuditLog(db, {
+    action: "create",
+    collection: "businesses",
+    recordId: businessRef.key ?? "",
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function updateBusiness(id: string, data: Partial<Business>): Promise<void> {
   const db = getDB();
   if (!db) return;
   await update(ref(db, `businesses/${id}`), { ...data, updatedAt: nowISO() });
+  await writeAuditLog(db, {
+    action: "update",
+    collection: "businesses",
+    recordId: id,
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function deleteBusiness(id: string): Promise<void> {
   const db = getDB();
   if (!db) return;
   await remove(ref(db, `businesses/${id}`));
+  await writeAuditLog(db, {
+    action: "delete",
+    collection: "businesses",
+    recordId: id,
+  });
 }
 
 // ── Tasks ─────────────────────────────────────────────────────────────────────
@@ -311,19 +402,37 @@ export async function deleteBusiness(id: string): Promise<void> {
 export async function createTask(data: Omit<Task, "id" | "createdAt">): Promise<void> {
   const db = getDB();
   if (!db) return;
-  await push(ref(db, "tasks"), { ...data, createdAt: nowISO() });
+  const taskRef = push(ref(db, "tasks"));
+  await set(taskRef, { ...data, createdAt: nowISO() });
+  await writeAuditLog(db, {
+    action: "create",
+    collection: "tasks",
+    recordId: taskRef.key ?? "",
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function updateTask(id: string, data: Partial<Task>): Promise<void> {
   const db = getDB();
   if (!db) return;
   await update(ref(db, `tasks/${id}`), data);
+  await writeAuditLog(db, {
+    action: "update",
+    collection: "tasks",
+    recordId: id,
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function deleteTask(id: string): Promise<void> {
   const db = getDB();
   if (!db) return;
   await remove(ref(db, `tasks/${id}`));
+  await writeAuditLog(db, {
+    action: "delete",
+    collection: "tasks",
+    recordId: id,
+  });
 }
 
 // ── Grants ────────────────────────────────────────────────────────────────────
@@ -331,19 +440,37 @@ export async function deleteTask(id: string): Promise<void> {
 export async function createGrant(data: Omit<Grant, "id" | "createdAt">): Promise<void> {
   const db = getDB();
   if (!db) return;
-  await push(ref(db, "grants"), { ...data, createdAt: nowISO() });
+  const grantRef = push(ref(db, "grants"));
+  await set(grantRef, { ...data, createdAt: nowISO() });
+  await writeAuditLog(db, {
+    action: "create",
+    collection: "grants",
+    recordId: grantRef.key ?? "",
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function updateGrant(id: string, data: Partial<Grant>): Promise<void> {
   const db = getDB();
   if (!db) return;
   await update(ref(db, `grants/${id}`), data);
+  await writeAuditLog(db, {
+    action: "update",
+    collection: "grants",
+    recordId: id,
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function deleteGrant(id: string): Promise<void> {
   const db = getDB();
   if (!db) return;
   await remove(ref(db, `grants/${id}`));
+  await writeAuditLog(db, {
+    action: "delete",
+    collection: "grants",
+    recordId: id,
+  });
 }
 
 // ── Team ──────────────────────────────────────────────────────────────────────
@@ -351,19 +478,37 @@ export async function deleteGrant(id: string): Promise<void> {
 export async function createTeamMember(data: Omit<TeamMember, "id" | "createdAt">): Promise<void> {
   const db = getDB();
   if (!db) return;
-  await push(ref(db, "team"), { ...data, createdAt: nowISO() });
+  const memberRef = push(ref(db, "team"));
+  await set(memberRef, { ...data, createdAt: nowISO() });
+  await writeAuditLog(db, {
+    action: "create",
+    collection: "team",
+    recordId: memberRef.key ?? "",
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function updateTeamMember(id: string, data: Partial<TeamMember>): Promise<void> {
   const db = getDB();
   if (!db) return;
   await update(ref(db, `team/${id}`), data);
+  await writeAuditLog(db, {
+    action: "update",
+    collection: "team",
+    recordId: id,
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function deleteTeamMember(id: string): Promise<void> {
   const db = getDB();
   if (!db) return;
   await remove(ref(db, `team/${id}`));
+  await writeAuditLog(db, {
+    action: "delete",
+    collection: "team",
+    recordId: id,
+  });
 }
 
 // ── Projects ──────────────────────────────────────────────────────────────────
@@ -371,19 +516,37 @@ export async function deleteTeamMember(id: string): Promise<void> {
 export async function createProject(data: Omit<Project, "id" | "createdAt" | "updatedAt">): Promise<void> {
   const db = getDB();
   if (!db) return;
-  await push(ref(db, "projects"), { ...data, createdAt: nowISO(), updatedAt: nowISO() });
+  const projectRef = push(ref(db, "projects"));
+  await set(projectRef, { ...data, createdAt: nowISO(), updatedAt: nowISO() });
+  await writeAuditLog(db, {
+    action: "create",
+    collection: "projects",
+    recordId: projectRef.key ?? "",
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function updateProject(id: string, data: Partial<Project>): Promise<void> {
   const db = getDB();
   if (!db) return;
   await update(ref(db, `projects/${id}`), { ...data, updatedAt: nowISO() });
+  await writeAuditLog(db, {
+    action: "update",
+    collection: "projects",
+    recordId: id,
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function deleteProject(id: string): Promise<void> {
   const db = getDB();
   if (!db) return;
   await remove(ref(db, `projects/${id}`));
+  await writeAuditLog(db, {
+    action: "delete",
+    collection: "projects",
+    recordId: id,
+  });
 }
 
 // ── UserProfiles (admin only) ─────────────────────────────────────────────────
@@ -394,12 +557,62 @@ export async function updateUserProfile(uid: string, data: Partial<UserProfile>)
   const db = getDB();
   if (!db) return;
   await update(ref(db, `userProfiles/${uid}`), data);
+  await writeAuditLog(db, {
+    action: "update",
+    collection: "userProfiles",
+    recordId: uid,
+    details: { fields: Object.keys(data) },
+  });
+}
+
+export async function setUserProfileRecord(uid: string, data: Omit<UserProfile, "id">): Promise<void> {
+  const db = getDB();
+  if (!db) return;
+  const profileRef = ref(db, `userProfiles/${uid}`);
+  const before = await get(profileRef);
+  await set(profileRef, data);
+  await writeAuditLog(db, {
+    action: before.exists() ? "update" : "create",
+    collection: "userProfiles",
+    recordId: uid,
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function deleteUserProfile(uid: string): Promise<void> {
   const db = getDB();
   if (!db) return;
   await remove(ref(db, `userProfiles/${uid}`));
+  await writeAuditLog(db, {
+    action: "delete",
+    collection: "userProfiles",
+    recordId: uid,
+  });
+}
+
+// Deletes a portal account from both Firebase Auth and userProfiles via a
+// protected admin API route. Requires current user to be signed in as admin.
+export async function deletePortalUserAccount(uid: string): Promise<void> {
+  const auth = getAuth();
+  const currentUser = auth?.currentUser;
+  if (!currentUser) throw new Error("not_authenticated");
+
+  const token = await currentUser.getIdToken();
+  const res = await fetch(`/api/members/admin/users/${encodeURIComponent(uid)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    let error = "delete_failed";
+    try {
+      const data = await res.json() as { error?: string };
+      if (data.error) error = data.error;
+    } catch {
+      // ignore json parse error
+    }
+    throw new Error(error);
+  }
 }
 
 export async function getUserProfilesList(): Promise<UserProfile[]> {
@@ -426,6 +639,12 @@ export async function createInviteCode(data: Omit<InviteCode, "id">): Promise<vo
   // Store at inviteCodes/{code} so the signup page can read a single code without
   // needing to list the entire collection (which requires admin auth).
   await set(ref(db, `inviteCodes/${data.code}`), data);
+  await writeAuditLog(db, {
+    action: "create",
+    collection: "inviteCodes",
+    recordId: data.code,
+    details: { role: data.role, expiresAt: data.expiresAt },
+  });
 }
 
 // Reads a single invite code by its code value (e.g. "VOLTA-A3BX7M").
@@ -443,12 +662,23 @@ export async function updateInviteCode(id: string, data: Partial<InviteCode>): P
   const db = getDB();
   if (!db) return;
   await update(ref(db, `inviteCodes/${id}`), data);
+  await writeAuditLog(db, {
+    action: "update",
+    collection: "inviteCodes",
+    recordId: id,
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function deleteInviteCode(id: string): Promise<void> {
   const db = getDB();
   if (!db) return;
   await remove(ref(db, `inviteCodes/${id}`));
+  await writeAuditLog(db, {
+    action: "delete",
+    collection: "inviteCodes",
+    recordId: id,
+  });
 }
 
 export async function getInviteCodes(): Promise<InviteCode[]> {
@@ -465,19 +695,37 @@ export const subscribeCalendarEvents = makeSubscriber<CalendarEvent>("calendarEv
 export async function createCalendarEvent(data: Omit<CalendarEvent, "id">): Promise<void> {
   const db = getDB();
   if (!db) return;
-  await push(ref(db, "calendarEvents"), data);
+  const eventRef = push(ref(db, "calendarEvents"));
+  await set(eventRef, data);
+  await writeAuditLog(db, {
+    action: "create",
+    collection: "calendarEvents",
+    recordId: eventRef.key ?? "",
+    details: { title: data.title },
+  });
 }
 
 export async function updateCalendarEvent(id: string, data: Partial<CalendarEvent>): Promise<void> {
   const db = getDB();
   if (!db) return;
   await update(ref(db, `calendarEvents/${id}`), data);
+  await writeAuditLog(db, {
+    action: "update",
+    collection: "calendarEvents",
+    recordId: id,
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function deleteCalendarEvent(id: string): Promise<void> {
   const db = getDB();
   if (!db) return;
   await remove(ref(db, `calendarEvents/${id}`));
+  await writeAuditLog(db, {
+    action: "delete",
+    collection: "calendarEvents",
+    recordId: id,
+  });
 }
 
 // ── InterviewInvites ──────────────────────────────────────────────────────────
@@ -490,12 +738,24 @@ export async function createInterviewInvite(token: string, data: Omit<InterviewI
   const db = getDB();
   if (!db) return;
   await set(ref(db, `interviewInvites/${token}`), data);
+  await writeAuditLog(db, {
+    action: "create",
+    collection: "interviewInvites",
+    recordId: token,
+    details: { role: data.role, expiresAt: data.expiresAt, multiUse: !!data.multiUse },
+  });
 }
 
 export async function updateInterviewInvite(token: string, data: Partial<InterviewInvite>): Promise<void> {
   const db = getDB();
   if (!db) return;
   await update(ref(db, `interviewInvites/${token}`), data);
+  await writeAuditLog(db, {
+    action: "update",
+    collection: "interviewInvites",
+    recordId: token,
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function getInterviewInvite(token: string): Promise<InterviewInvite | null> {
@@ -513,19 +773,37 @@ export const subscribeInterviewSlots = makeSubscriber<InterviewSlot>("interviewS
 export async function createInterviewSlot(data: Omit<InterviewSlot, "id">): Promise<void> {
   const db = getDB();
   if (!db) return;
-  await push(ref(db, "interviewSlots"), data);
+  const slotRef = push(ref(db, "interviewSlots"));
+  await set(slotRef, data);
+  await writeAuditLog(db, {
+    action: "create",
+    collection: "interviewSlots",
+    recordId: slotRef.key ?? "",
+    details: { datetime: data.datetime, durationMinutes: data.durationMinutes },
+  });
 }
 
 export async function updateInterviewSlot(id: string, data: Partial<InterviewSlot>): Promise<void> {
   const db = getDB();
   if (!db) return;
   await update(ref(db, `interviewSlots/${id}`), data);
+  await writeAuditLog(db, {
+    action: "update",
+    collection: "interviewSlots",
+    recordId: id,
+    details: { fields: Object.keys(data) },
+  });
 }
 
 export async function deleteInterviewSlot(id: string): Promise<void> {
   const db = getDB();
   if (!db) return;
   await remove(ref(db, `interviewSlots/${id}`));
+  await writeAuditLog(db, {
+    action: "delete",
+    collection: "interviewSlots",
+    recordId: id,
+  });
 }
 
 export async function getInterviewSlots(): Promise<InterviewSlot[]> {
@@ -554,6 +832,12 @@ export async function updateInterviewSettings(data: Partial<InterviewSettings>):
   const db = getDB();
   if (!db) return;
   await update(ref(db, "interviewSettings"), data);
+  await writeAuditLog(db, {
+    action: "update",
+    collection: "interviewSettings",
+    recordId: "singleton",
+    details: { fields: Object.keys(data) },
+  });
 }
 
 // ── EXPORT / IMPORT ───────────────────────────────────────────────────────────
@@ -572,4 +856,10 @@ export async function importAllData(json: string): Promise<void> {
   const data = JSON.parse(json);
   const { exportedAt: _unused, ...rest } = data; // strip exportedAt before restoring
   await set(ref(db, "/"), rest);
+  await writeAuditLog(db, {
+    action: "import",
+    collection: "database",
+    recordId: "root",
+    details: { source: "importAllData" },
+  });
 }

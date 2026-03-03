@@ -2,9 +2,9 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { type User, onAuthStateChanged } from "firebase/auth";
-import { ref, get, set } from "firebase/database";
+import { ref, get } from "firebase/database";
 import { getAuth, getDB } from "@/lib/firebase";
-import { type UserProfile, type AuthRole } from "@/lib/members/storage";
+import { setUserProfileRecord, type UserProfile, type AuthRole } from "@/lib/members/storage";
 
 // ── CONTEXT TYPE ──────────────────────────────────────────────────────────────
 
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 active:    true,
                 createdAt: new Date().toISOString(),
               };
-              await set(ref(db, `userProfiles/${firebaseUser.uid}`), {
+              await setUserProfileRecord(firebaseUser.uid, {
                 email:     newProfile.email,
                 authRole:  newProfile.authRole,
                 active:    newProfile.active,

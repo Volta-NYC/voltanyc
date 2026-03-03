@@ -5,9 +5,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signUp } from "@/lib/members/firebaseAuth";
-import { getInviteCodeByValue, updateInviteCode, createTeamMember, type AuthRole } from "@/lib/members/storage";
-import { ref, set } from "firebase/database";
-import { getDB } from "@/lib/firebase";
+import {
+  getInviteCodeByValue, updateInviteCode, setUserProfileRecord, type AuthRole,
+} from "@/lib/members/storage";
 
 export default function SignupPage() {
   const [code, setCode] = useState("");
@@ -64,35 +64,12 @@ export default function SignupPage() {
     // Non-fatal: if this fails (e.g. DB rules), authContext will create a default
     // "member" profile on first login. Admin can then manually set the correct role.
     try {
-      const db = getDB();
-      if (db) {
-        await set(ref(db, `userProfiles/${uid}`), {
-          email:     email.trim().toLowerCase(),
-          authRole:  inviteRole,
-          name:      name.trim(),
-          active:    true,
-          createdAt: new Date().toISOString(),
-        });
-      }
-    } catch { /* non-fatal */ }
-
-    // ── Step 4: Add to team members database ──────────────────────────────────
-    // Non-fatal: creates a team entry so the member shows up in the Team tab
-    // immediately without needing manual entry by an admin.
-    try {
-      const teamRole = inviteRole === "project_lead" ? "Team Lead" : "Member";
-      await createTeamMember({
-        name:        name.trim(),
-        email:       email.trim().toLowerCase(),
-        role:        teamRole,
-        status:      "Active",
-        joinDate:    new Date().toISOString().split("T")[0],
-        school:      "",
-        divisions:   [],
-        pod:         "",
-        slackHandle: "",
-        skills:      [],
-        notes:       "",
+      await setUserProfileRecord(uid, {
+        email:     email.trim().toLowerCase(),
+        authRole:  inviteRole,
+        name:      name.trim(),
+        active:    true,
+        createdAt: new Date().toISOString(),
       });
     } catch { /* non-fatal */ }
 

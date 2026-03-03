@@ -5,6 +5,7 @@
 
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getDatabase, type Database } from "firebase-admin/database";
+import { getAuth, type Auth } from "firebase-admin/auth";
 
 function initAdmin() {
   if (getApps().some((a) => a.name === "admin")) return;
@@ -29,4 +30,10 @@ export function getAdminDB(): Database | null {
   initAdmin();
   const app = getApps().find((a) => a.name === "admin");
   return app ? getDatabase(app) : null;
+}
+
+export function getAdminAuth(): Auth | null {
+  initAdmin();
+  const app = getApps().find((a) => a.name === "admin");
+  return app ? getAuth(app) : null;
 }
