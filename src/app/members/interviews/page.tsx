@@ -103,10 +103,10 @@ function InterviewsContent() {
   const [newToken, setNewToken] = useState<string | null>(null);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [assignSlotByInvite, setAssignSlotByInvite] = useState<Record<string, string>>({});
-  const [zoomEnabled, setZoomEnabled] = useState(true);
   const [zoomLinkInput, setZoomLinkInput] = useState("");
   const [effectiveZoomLink, setEffectiveZoomLink] = useState("");
-  const [zoomSource, setZoomSource] = useState<"custom" | "env" | "disabled" | "none">("none");
+  const [editingZoom, setEditingZoom] = useState(false);
+  const [copiedZoom, setCopiedZoom] = useState(false);
   const [zoomSaveMessage, setZoomSaveMessage] = useState<string | null>(null);
   const [savingZoom, setSavingZoom] = useState(false);
 
@@ -135,20 +135,15 @@ function InterviewsContent() {
         if (!res.ok) return;
         const data = await res.json() as {
           zoomLink?: string;
-          zoomEnabled?: boolean;
-          source?: "custom" | "env" | "disabled" | "none";
           customZoomLink?: string;
         };
         if (cancelled) return;
         const custom = (data.customZoomLink ?? "").trim();
-        setZoomEnabled(data.zoomEnabled ?? true);
         setEffectiveZoomLink(data.zoomLink ?? "");
-        setZoomSource(data.source ?? "none");
         setZoomLinkInput(custom || (data.zoomLink ?? ""));
       } catch {
         if (cancelled) return;
         setEffectiveZoomLink("");
-        setZoomSource("none");
       }
     };
     void load();
@@ -162,7 +157,7 @@ function InterviewsContent() {
     setZoomSaveMessage(null);
     try {
       await updateInterviewSettings({
-        zoomEnabled,
+        zoomEnabled: true,
         zoomLink: zoomLinkInput.trim(),
         updatedAt: Date.now(),
         updatedBy: user?.uid ?? "",
@@ -170,15 +165,12 @@ function InterviewsContent() {
       const res = await fetch("/api/booking/zoom", { cache: "no-store" });
       const data = await res.json() as {
         zoomLink?: string;
-        zoomEnabled?: boolean;
-        source?: "custom" | "env" | "disabled" | "none";
         customZoomLink?: string;
       };
       const custom = (data.customZoomLink ?? "").trim();
-      setZoomEnabled(data.zoomEnabled ?? true);
       setEffectiveZoomLink(data.zoomLink ?? "");
-      setZoomSource(data.source ?? "none");
       setZoomLinkInput(custom || (data.zoomLink ?? ""));
+      setEditingZoom(false);
       setZoomSaveMessage("Zoom settings saved.");
     } catch {
       setZoomSaveMessage("Could not save Zoom settings. Try again.");
@@ -186,6 +178,13 @@ function InterviewsContent() {
       setSavingZoom(false);
       setTimeout(() => setZoomSaveMessage(null), 2200);
     }
+  };
+
+  const copyZoomLink = async () => {
+    if (!effectiveZoomLink) return;
+    await navigator.clipboard.writeText(effectiveZoomLink);
+    setCopiedZoom(true);
+    setTimeout(() => setCopiedZoom(false), 1800);
   };
 
   const now = Date.now();
@@ -516,52 +515,62 @@ function InterviewsContent() {
       {activeTab === "upcoming" && (
         <div className="space-y-5">
           <div className="bg-[#1C1F26] border border-white/8 rounded-xl p-4 space-y-3">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
               <div>
                 <p className="text-white/85 text-sm font-semibold">Interview Zoom Link</p>
                 <p className="text-white/40 text-xs mt-1 font-body">
-                  {zoomSource === "custom" && "Using custom link for applicants and ICS files."}
-                  {zoomSource === "env" && "Using default environment link. Save a custom link to override."}
-                  {zoomSource === "disabled" && "Zoom link is currently disabled for applicants."}
-                  {zoomSource === "none" && "No Zoom link configured yet."}
+                  Used for applicant confirmation pages and calendar .ics invites.
                 </p>
               </div>
-              <button
-                onClick={() => setZoomEnabled((v) => !v)}
-                className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
-                  zoomEnabled ? "bg-[#85CC17]" : "bg-white/20"
-                }`}
-                title="Toggle Zoom link visibility for applicants"
-              >
-                <span
-                  className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
-                    zoomEnabled ? "left-6" : "left-1"
-                  }`}
-                />
-              </button>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                value={zoomLinkInput}
-                onChange={(e) => setZoomLinkInput(e.target.value)}
-                placeholder="https://zoom.us/j/..."
-                className="flex-1 bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#85CC17]/45"
-              />
-              <Btn variant="primary" size="sm" onClick={saveZoomSettings} disabled={savingZoom}>
-                {savingZoom ? "Saving..." : "Save Zoom"}
-              </Btn>
-              {zoomEnabled && effectiveZoomLink && (
+              <div className="flex items-center gap-2">
+                <Btn variant="secondary" size="sm" onClick={copyZoomLink} disabled={!effectiveZoomLink}>
+                  {copiedZoom ? "Copied!" : "Copy Link"}
+                </Btn>
                 <a
-                  href={effectiveZoomLink}
+                  href={effectiveZoomLink || "#"}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#2D8CFF]/14 border border-[#2D8CFF]/30 text-[#6DB8FF] text-sm font-semibold hover:bg-[#2D8CFF]/22 transition-colors"
+                  className={`inline-flex items-center justify-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                    effectiveZoomLink
+                      ? "bg-[#2D8CFF]/14 border border-[#2D8CFF]/30 text-[#6DB8FF] hover:bg-[#2D8CFF]/22"
+                      : "bg-white/6 border border-white/10 text-white/35 pointer-events-none"
+                  }`}
                 >
-                  Join Zoom
+                  Join
                 </a>
-              )}
+                <Btn variant="secondary" size="sm" onClick={() => setEditingZoom(true)}>
+                  Edit
+                </Btn>
+              </div>
             </div>
+
+            {!effectiveZoomLink && !editingZoom && (
+              <p className="text-white/35 text-xs font-body">No Zoom link configured yet.</p>
+            )}
+
+            {editingZoom && (
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  value={zoomLinkInput}
+                  onChange={(e) => setZoomLinkInput(e.target.value)}
+                  placeholder="https://zoom.us/j/..."
+                  className="flex-1 bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#85CC17]/45"
+                />
+                <Btn variant="primary" size="sm" onClick={saveZoomSettings} disabled={savingZoom}>
+                  {savingZoom ? "Saving..." : "Save"}
+                </Btn>
+                <Btn
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setEditingZoom(false);
+                    setZoomLinkInput(effectiveZoomLink);
+                  }}
+                >
+                  Cancel
+                </Btn>
+              </div>
+            )}
 
             {zoomSaveMessage && <p className="text-xs text-white/55">{zoomSaveMessage}</p>}
           </div>
