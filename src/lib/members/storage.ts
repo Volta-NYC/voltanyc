@@ -100,6 +100,7 @@ export interface TeamMember {
   id: string;
   name: string;
   school: string;
+  grade?: string;
   divisions: string[];    // may be undefined if Firebase omitted empty array
   pod: string;
   role: "Team Lead" | "Member" | "Associate" | "Advisor";

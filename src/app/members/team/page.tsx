@@ -3,8 +3,7 @@
 import { useRef, useState, useEffect } from "react";
 import MembersLayout from "@/components/members/MembersLayout";
 import {
-  PageHeader, SearchBar, Badge, Btn, Modal, Field, Input, Select, TextArea,
-  Table, Empty, StatCard, TagInput, useConfirm,
+  PageHeader, SearchBar, Btn, Modal, Field, Input, Table, Empty, StatCard, useConfirm,
 } from "@/components/members/ui";
 import {
   subscribeTeam, createTeamMember, updateTeamMember, deleteTeamMember, type TeamMember,
@@ -13,16 +12,9 @@ import { useAuth } from "@/lib/members/authContext";
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
 
-const MEMBER_ROLES = ["Team Lead", "Member", "Associate", "Advisor"];
-const STATUSES     = ["Active", "On Leave", "Alumni", "Inactive"];
-const DIVISIONS    = ["Tech", "Marketing", "Finance", "Outreach", "Operations"];
-const SKILL_OPTIONS = [
-  "React", "TypeScript", "Python", "Figma", "Canva", "Excel",
-  "Grant Writing", "SEO", "Video Editing", "Social Media", "Financial Analysis", "Project Management",
-];
-
 // Blank form values for creating a new team member.
 const BLANK_FORM: Omit<TeamMember, "id" | "createdAt"> = {
+  grade: "",
   name: "", school: "", divisions: [], pod: "", role: "Member", slackHandle: "",
   email: "", status: "Active", skills: [], joinDate: "", notes: "",
 };
@@ -31,6 +23,7 @@ type ImportedMember = {
   name: string;
   email: string;
   school: string;
+  grade: string;
 };
 
 function normalizeText(v: string): string {
@@ -95,7 +88,6 @@ function findHeaderIndex(headers: string[], aliases: string[]): number {
 export default function TeamPage() {
   const [team, setTeam]               = useState<TeamMember[]>([]);
   const [search, setSearch]           = useState("");
-  const [filterDiv, setFilterDiv]     = useState("");
   const [modal, setModal]             = useState<"create" | "edit" | null>(null);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [form, setForm]               = useState(BLANK_FORM);
@@ -137,6 +129,7 @@ export default function TeamPage() {
       const nameIdx = findHeaderIndex(headers, ["name", "full name", "student name"]);
       const emailIdx = findHeaderIndex(headers, ["email", "email address", "student email"]);
       const schoolIdx = findHeaderIndex(headers, ["high school", "high school name", "school", "school name"]);
+      const gradeIdx = findHeaderIndex(headers, ["grade", "year", "class year"]);
 
       if (nameIdx === -1 || emailIdx === -1 || schoolIdx === -1) {
         setImportMessage("CSV needs columns for Name, Email, and High School.");
@@ -150,11 +143,12 @@ export default function TeamPage() {
         const name = normalizeText(row[nameIdx] ?? "");
         const email = normalizeText(row[emailIdx] ?? "");
         const school = normalizeText(row[schoolIdx] ?? "");
+        const grade = gradeIdx === -1 ? "" : normalizeText(row[gradeIdx] ?? "");
         if (!name) {
           invalidRows += 1;
           continue;
         }
-        rawEntries.push({ name, email, school });
+        rawEntries.push({ name, email, school, grade });
       }
 
       const deduped: ImportedMember[] = [];
@@ -170,6 +164,7 @@ export default function TeamPage() {
           if (existing) {
             if (!existing.school && entry.school) existing.school = entry.school;
             if (!existing.name && entry.name) existing.name = entry.name;
+            if (!existing.grade && entry.grade) existing.grade = entry.grade;
             continue;
           }
           seenEmail.set(emailKey, { ...entry });
@@ -183,41 +178,66 @@ export default function TeamPage() {
       }
 
       const existingByEmail = new Map<string, TeamMember>();
-      const existingByNameSchool = new Map<string, TeamMember>();
       const existingByName = new Map<string, TeamMember[]>();
 
       for (const member of team) {
         const memberEmailKey = normalizeKey(member.email ?? "");
         const memberNameKey = normalizeKey(member.name ?? "");
-        const memberNameSchoolKey = `${memberNameKey}|${normalizeKey(member.school ?? "")}`;
         if (memberEmailKey) existingByEmail.set(memberEmailKey, member);
         if (memberNameKey) {
           const arr = existingByName.get(memberNameKey) ?? [];
           arr.push(member);
           existingByName.set(memberNameKey, arr);
         }
-        existingByNameSchool.set(memberNameSchoolKey, member);
       }
 
       let added = 0;
       let updated = 0;
       let skipped = 0;
+      let ambiguous = 0;
       const today = new Date().toISOString().split("T")[0];
 
       for (const entry of deduped) {
         const emailKey = normalizeKey(entry.email);
         const nameKey = normalizeKey(entry.name);
-        const nameSchoolKey = `${nameKey}|${normalizeKey(entry.school)}`;
+        const schoolKey = normalizeKey(entry.school);
+        const sameName = existingByName.get(nameKey) ?? [];
 
-        const existingByExactEmail = emailKey ? existingByEmail.get(emailKey) : undefined;
-        if (existingByExactEmail) {
+        let target: TeamMember | undefined;
+
+        // Name-first match behavior (requested): update by name when unique.
+        if (sameName.length === 1) {
+          [target] = sameName;
+        } else if (sameName.length > 1) {
+          // Handle overlaps: disambiguate by email first, then school.
+          if (emailKey) {
+            target = sameName.find((m) => normalizeKey(m.email ?? "") === emailKey);
+          }
+          if (!target && schoolKey) {
+            const schoolMatches = sameName.filter((m) => normalizeKey(m.school ?? "") === schoolKey);
+            if (schoolMatches.length === 1) [target] = schoolMatches;
+          }
+          if (!target) {
+            ambiguous += 1;
+            continue;
+          }
+        }
+
+        // Fallback match by exact email when name match is missing.
+        if (!target && emailKey) target = existingByEmail.get(emailKey);
+
+        if (target) {
           const patch: Partial<TeamMember> = {};
-          if (entry.name && entry.name !== existingByExactEmail.name) patch.name = entry.name;
-          if (entry.school && entry.school !== existingByExactEmail.school) patch.school = entry.school;
-          if (!existingByExactEmail.email && entry.email) patch.email = entry.email;
+          if (entry.name && entry.name !== target.name) patch.name = entry.name;
+          if (entry.email && entry.email !== target.email) patch.email = entry.email;
+          if (entry.school && entry.school !== target.school) patch.school = entry.school;
+          if (entry.grade && entry.grade !== (target.grade ?? "")) patch.grade = entry.grade;
           if (Object.keys(patch).length > 0) {
             // eslint-disable-next-line no-await-in-loop
-            await updateTeamMember(existingByExactEmail.id, patch);
+            await updateTeamMember(target.id, patch);
+            if (patch.email) {
+              existingByEmail.set(normalizeKey(patch.email), { ...target, ...patch } as TeamMember);
+            }
             updated += 1;
           } else {
             skipped += 1;
@@ -225,30 +245,12 @@ export default function TeamPage() {
           continue;
         }
 
-        if (!emailKey) {
-          if (existingByNameSchool.has(nameSchoolKey)) {
-            skipped += 1;
-            continue;
-          }
-        } else {
-          const sameName = existingByName.get(nameKey) ?? [];
-          const namematchWithoutEmail = sameName.find((m) => !normalizeKey(m.email ?? ""));
-          if (namematchWithoutEmail) {
-            const patch: Partial<TeamMember> = { email: entry.email };
-            if (entry.school) patch.school = entry.school;
-            // eslint-disable-next-line no-await-in-loop
-            await updateTeamMember(namematchWithoutEmail.id, patch);
-            updated += 1;
-            existingByEmail.set(emailKey, { ...namematchWithoutEmail, ...patch });
-            continue;
-          }
-        }
-
         // eslint-disable-next-line no-await-in-loop
         await createTeamMember({
           name: entry.name,
           email: entry.email,
           school: entry.school,
+          grade: entry.grade,
           divisions: [],
           pod: "",
           role: "Member",
@@ -262,7 +264,7 @@ export default function TeamPage() {
       }
 
       setImportMessage(
-        `Imported ${rows.length - 1} rows: ${added} added, ${updated} updated, ${skipped} skipped${invalidRows ? `, ${invalidRows} invalid` : ""}.`
+        `Imported ${rows.length - 1} rows: ${added} added, ${updated} updated, ${skipped} skipped${ambiguous ? `, ${ambiguous} ambiguous name matches` : ""}${invalidRows ? `, ${invalidRows} invalid` : ""}.`
       );
     } catch {
       setImportMessage("Could not import CSV. Check formatting and try again.");
@@ -282,6 +284,7 @@ export default function TeamPage() {
     setForm({
       name:        member.name,
       school:      member.school,
+      grade:       member.grade ?? "",
       // Guard against undefined: Firebase omits empty arrays when storing.
       divisions:   member.divisions ?? [],
       pod:         member.pod,
@@ -307,15 +310,14 @@ export default function TeamPage() {
     setModal(null);
   };
 
-  // Filter by search text and/or division dropdown.
+  // Filter by search text.
   const filtered = team.filter(member => {
     const matchesSearch = !search
       || member.name.toLowerCase().includes(search.toLowerCase())
+      || member.email.toLowerCase().includes(search.toLowerCase())
       || member.school.toLowerCase().includes(search.toLowerCase())
-      || member.slackHandle.toLowerCase().includes(search.toLowerCase());
-    // Guard: divisions may be undefined if Firebase omitted the empty array.
-    const matchesDivision = !filterDiv || (member.divisions ?? []).includes(filterDiv);
-    return matchesSearch && matchesDivision;
+      || (member.grade ?? "").toLowerCase().includes(search.toLowerCase());
+    return matchesSearch;
   });
 
   const handleSort = (i: number) => {
@@ -326,17 +328,17 @@ export default function TeamPage() {
     let cmp = 0;
     switch (sortCol) {
       case 0: cmp = a.name.localeCompare(b.name); break;
-      case 1: cmp = (a.school || "").localeCompare(b.school || ""); break;
-      case 2: cmp = a.role.localeCompare(b.role); break;
-      case 3: cmp = ((a.divisions ?? [])[0] || "").localeCompare((b.divisions ?? [])[0] || ""); break;
-      case 4: cmp = a.status.localeCompare(b.status); break;
-      case 5: cmp = (a.slackHandle || "").localeCompare(b.slackHandle || ""); break;
+      case 1: cmp = (a.email || "").localeCompare(b.email || ""); break;
+      case 2: cmp = (a.school || "").localeCompare(b.school || ""); break;
+      case 3: cmp = (a.grade || "").localeCompare(b.grade || ""); break;
       default: return 0;
     }
     return sortDir === "asc" ? cmp : -cmp;
   });
 
-  const activeMembers = team.filter(m => m.status === "Active");
+  const withEmail = team.filter((m) => (m.email ?? "").trim() !== "").length;
+  const withSchool = team.filter((m) => (m.school ?? "").trim() !== "").length;
+  const withGrade = team.filter((m) => (m.grade ?? "").trim() !== "").length;
 
   return (
     <MembersLayout>
@@ -353,7 +355,7 @@ export default function TeamPage() {
 
       <PageHeader
         title="Team Directory"
-        subtitle={`${activeMembers.length} active · ${team.filter(m => m.role === "Team Lead").length} team leads`}
+        subtitle={`${team.length} members tracked`}
         action={canEdit ? (
           <div className="flex gap-2">
             <Btn variant="secondary" onClick={() => fileInputRef.current?.click()} disabled={importingCsv}>
@@ -370,31 +372,21 @@ export default function TeamPage() {
       {/* Summary stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         <StatCard label="Total" value={team.length} />
-        <StatCard label="Active" value={activeMembers.length} color="text-green-400" />
-        <StatCard label="Team Leads" value={team.filter(m => m.role === "Team Lead").length} color="text-blue-400" />
-        <StatCard label="Alumni" value={team.filter(m => m.status === "Alumni").length} color="text-white/40" />
+        <StatCard label="With Email" value={withEmail} color="text-green-400" />
+        <StatCard label="With School" value={withSchool} color="text-blue-400" />
+        <StatCard label="With Grade" value={withGrade} color="text-white/40" />
       </div>
 
-      {/* Search and filter controls */}
+      {/* Search controls */}
       <div className="flex gap-3 mb-4 flex-wrap">
-        <SearchBar value={search} onChange={setSearch} placeholder="Search members, schools…" />
-        <select
-          value={filterDiv}
-          onChange={e => setFilterDiv(e.target.value)}
-          className="bg-[#1C1F26] border border-white/8 rounded-xl px-3 py-2.5 text-sm text-white/70 focus:outline-none"
-        >
-          <option value="">All divisions</option>
-          {DIVISIONS.map(d => <option key={d}>{d}</option>)}
-        </select>
+        <SearchBar value={search} onChange={setSearch} placeholder="Search by name, email, school, or grade…" />
       </div>
 
       {/* Team member list */}
       <Table
-        cols={["Name", "School", "Role", "Division(s)", "Status", "Slack", "Actions"]}
-        sortCol={sortCol} sortDir={sortDir} onSort={handleSort} sortableCols={[0,1,2,3,4,5]}
+        cols={["Name", "Email", "School", "Grade", "Actions"]}
+        sortCol={sortCol} sortDir={sortDir} onSort={handleSort} sortableCols={[0,1,2,3]}
         rows={sorted.map(member => {
-          // Guard: divisions may be undefined if Firebase omitted the empty array.
-          const divisions = member.divisions ?? [];
           return [
             <div key="name" className="flex items-center gap-2.5">
               {/* Avatar with first initial */}
@@ -403,17 +395,9 @@ export default function TeamPage() {
               </div>
               <span className="text-white font-medium">{member.name}</span>
             </div>,
+            <span key="email" className="text-white/50 font-mono text-xs">{member.email || "—"}</span>,
             <span key="school" className="text-white/50">{member.school || "—"}</span>,
-            <Badge key="role" label={member.role} />,
-            <div key="divisions" className="flex flex-wrap gap-1">
-              {divisions.slice(0, 2).map(div => (
-                <span key={div} className="text-xs bg-white/8 text-white/50 px-2 py-0.5 rounded-full">{div}</span>
-              ))}
-            </div>,
-            <Badge key="status" label={member.status} />,
-            <span key="slack" className="text-white/40 font-mono text-xs">
-              {member.slackHandle ? `@${member.slackHandle}` : "—"}
-            </span>,
+            <span key="grade" className="text-white/50">{member.grade || "—"}</span>,
             <div key="actions" className="flex gap-2">
               {canEdit && <Btn size="sm" variant="secondary" onClick={() => openEdit(member)}>Edit</Btn>}
               {canEdit && <Btn size="sm" variant="danger" onClick={() => ask(async () => deleteTeamMember(member.id))}>Delete</Btn>}
@@ -434,42 +418,15 @@ export default function TeamPage() {
           <Field label="Full Name" required>
             <Input value={form.name} onChange={e => setField("name", e.target.value)} />
           </Field>
-          <Field label="School">
-            <Input value={form.school} onChange={e => setField("school", e.target.value)} />
-          </Field>
-          <Field label="Role">
-            <Select options={MEMBER_ROLES} value={form.role} onChange={e => setField("role", e.target.value)} />
-          </Field>
-          <Field label="Status">
-            <Select options={STATUSES} value={form.status} onChange={e => setField("status", e.target.value)} />
-          </Field>
           <Field label="Email">
             <Input type="email" value={form.email} onChange={e => setField("email", e.target.value)} />
           </Field>
-          <Field label="Slack Handle">
-            <Input value={form.slackHandle} onChange={e => setField("slackHandle", e.target.value)} placeholder="no @ needed" />
+          <Field label="School">
+            <Input value={form.school} onChange={e => setField("school", e.target.value)} />
           </Field>
-          <Field label="Pod / Team">
-            <Input value={form.pod} onChange={e => setField("pod", e.target.value)} />
+          <Field label="Grade">
+            <Input value={form.grade ?? ""} onChange={e => setField("grade", e.target.value)} placeholder="e.g. 9, 10, 11, 12" />
           </Field>
-          <Field label="Join Date">
-            <Input type="date" value={form.joinDate} onChange={e => setField("joinDate", e.target.value)} />
-          </Field>
-          <div className="col-span-2">
-            <Field label="Divisions">
-              <TagInput values={form.divisions} onChange={v => setField("divisions", v)} options={DIVISIONS} />
-            </Field>
-          </div>
-          <div className="col-span-2">
-            <Field label="Skills">
-              <TagInput values={form.skills} onChange={v => setField("skills", v)} options={SKILL_OPTIONS} />
-            </Field>
-          </div>
-          <div className="col-span-2">
-            <Field label="Notes">
-              <TextArea rows={2} value={form.notes} onChange={e => setField("notes", e.target.value)} />
-            </Field>
-          </div>
         </div>
         <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-white/8">
           <Btn variant="ghost" onClick={() => setModal(null)}>Cancel</Btn>
