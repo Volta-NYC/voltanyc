@@ -14,7 +14,7 @@ import { useAuth } from "@/lib/members/authContext";
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
 
-const STATUSES  = ["To Do", "In Progress", "Blocked"];
+const STATUSES  = ["To Do", "On Hold"];
 const PRIORITIES = ["Urgent", "High", "Medium", "Low"];
 const DIVISIONS  = ["Tech", "Marketing", "Finance", "Outreach"];
 
@@ -25,14 +25,18 @@ const BLANK_FORM: Omit<Task, "id" | "createdAt"> = {
 };
 
 // Ordered columns for the kanban board view.
-const BOARD_COLUMNS: Task["status"][] = ["To Do", "In Progress", "Blocked"];
+const BOARD_COLUMNS = ["To Do", "On Hold"] as const;
+type BoardStatus = (typeof BOARD_COLUMNS)[number];
 
 // Left border color for each kanban column.
 const COLUMN_BORDER_COLOR: Record<string, string> = {
-  "To Do":      "border-gray-500/30",
-  "In Progress": "border-blue-500/30",
-  "Blocked":    "border-red-500/30",
+  "To Do":   "border-gray-500/30",
+  "On Hold": "border-amber-500/30",
 };
+
+function normalizeStatus(status: Task["status"]): BoardStatus {
+  return status === "To Do" ? "To Do" : "On Hold";
+}
 
 // ── PAGE COMPONENT ────────────────────────────────────────────────────────────
 
@@ -66,7 +70,7 @@ export default function TasksPage() {
     setForm(prev => ({ ...prev, [key]: value }));
 
   // Open create modal, optionally pre-selecting the column's status.
-  const openCreate = (status?: Task["status"]) => {
+  const openCreate = (status?: BoardStatus) => {
     setForm({ ...BLANK_FORM, status: status ?? "To Do" });
     setEditingTask(null);
     setModal("create");
@@ -75,7 +79,7 @@ export default function TasksPage() {
   const openEdit = (task: Task) => {
     setForm({
       name:        task.name,
-      status:      task.status,
+      status:      normalizeStatus(task.status),
       priority:    task.priority,
       assignedTo:  task.assignedTo,
       businessId:  task.businessId,
@@ -102,14 +106,17 @@ export default function TasksPage() {
 
   // Filter by search text and/or division dropdown.
   const filtered = tasks.filter(task =>
+    task.status !== "Done"
+    && (
     (!search
       || task.name.toLowerCase().includes(search.toLowerCase())
       || task.assignedTo.toLowerCase().includes(search.toLowerCase()))
     && (!filterDiv || task.division === filterDiv)
+    )
   );
 
   const TASK_PRIORITY_ORDER: Record<string, number> = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
-  const TASK_STATUS_ORDER: Record<string, number>   = { "To Do": 0, "In Progress": 1, "Blocked": 2, "Done": 3 };
+  const TASK_STATUS_ORDER: Record<string, number> = { "To Do": 0, "On Hold": 1 };
   const handleSort = (i: number) => {
     if (sortCol === i) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortCol(i); setSortDir("asc"); }
@@ -118,7 +125,7 @@ export default function TasksPage() {
     let cmp = 0;
     switch (sortCol) {
       case 0: cmp = a.name.localeCompare(b.name); break;
-      case 1: cmp = (TASK_STATUS_ORDER[a.status] ?? 0) - (TASK_STATUS_ORDER[b.status] ?? 0); break;
+      case 1: cmp = (TASK_STATUS_ORDER[normalizeStatus(a.status)] ?? 0) - (TASK_STATUS_ORDER[normalizeStatus(b.status)] ?? 0); break;
       case 2: cmp = (TASK_PRIORITY_ORDER[a.priority] ?? 2) - (TASK_PRIORITY_ORDER[b.priority] ?? 2); break;
       case 3: cmp = a.division.localeCompare(b.division); break;
       case 4: cmp = (a.assignedTo || "").localeCompare(b.assignedTo || ""); break;
@@ -144,7 +151,7 @@ export default function TasksPage() {
 
       <PageHeader
         title="Tasks"
-        subtitle={`${tasks.filter(t => t.status !== "Done").length} open · ${tasks.filter(t => t.status === "Blocked").length} blocked`}
+        subtitle={`${filtered.length} open · ${filtered.filter(t => normalizeStatus(t.status) === "On Hold").length} on hold`}
         action={
           <div className="flex gap-2">
             {/* Board / Table view toggle */}
@@ -181,9 +188,9 @@ export default function TasksPage() {
 
       {/* ── Board view ── */}
       {view === "board" ? (
-        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-3">
           {BOARD_COLUMNS.map(column => {
-            const columnTasks = filtered.filter(t => t.status === column);
+            const columnTasks = filtered.filter(t => normalizeStatus(t.status) === column);
             return (
               <div
                 key={column}
@@ -198,7 +205,7 @@ export default function TasksPage() {
                   e.preventDefault();
                   setDragOverColumn(null);
                   if (draggingId) {
-                    await updateTask(draggingId, { status: column });
+                    await updateTask(draggingId, { status: column as Task["status"] });
                     setDraggingId(null);
                   }
                 }}
@@ -252,7 +259,7 @@ export default function TasksPage() {
             sortCol={sortCol} sortDir={sortDir} onSort={handleSort} sortableCols={[0,1,2,3,4,5]}
             rows={sortedTasks.map(task => [
               <span key="name" className="text-white font-medium">{task.name}</span>,
-              <Badge key="status" label={task.status} />,
+              <Badge key="status" label={normalizeStatus(task.status)} />,
               <Badge key="priority" label={task.priority} />,
               <span key="division" className="text-white/50">{task.division}</span>,
               <span key="assigned" className="text-white/50">{task.assignedTo || "—"}</span>,

@@ -71,7 +71,8 @@ export interface Business {
 export interface Task {
   id: string;
   name: string;
-  status: "To Do" | "In Progress" | "Blocked" | "Done";
+  // "In Progress" and "Blocked" are legacy values retained for backward compatibility.
+  status: "To Do" | "On Hold" | "In Progress" | "Blocked" | "Done";
   priority: "Urgent" | "High" | "Medium" | "Low";
   assignedTo: string;
   businessId: string;
