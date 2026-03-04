@@ -8,7 +8,6 @@ import {
   subscribeInterviewInvites,
   createInterviewInvite,
   updateInterviewInvite,
-  updateInterviewSettings,
   subscribeInterviewSlots,
   createInterviewSlot,
   updateInterviewSlot,
@@ -156,14 +155,29 @@ function InterviewsContent() {
     setSavingZoom(true);
     setZoomSaveMessage(null);
     try {
-      await updateInterviewSettings({
-        zoomEnabled: true,
-        zoomLink: zoomLinkInput.trim(),
-        updatedAt: Date.now(),
-        updatedBy: user?.uid ?? "",
+      const token = await user?.getIdToken();
+      if (!token) {
+        throw new Error("not_authenticated");
+      }
+
+      const saveRes = await fetch("/api/booking/zoom", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          zoomLink: zoomLinkInput.trim(),
+          updatedBy: user?.uid ?? "",
+        }),
+        cache: "no-store",
       });
-      const res = await fetch("/api/booking/zoom", { cache: "no-store" });
-      const data = await res.json() as {
+
+      if (!saveRes.ok) {
+        throw new Error("save_failed");
+      }
+
+      const data = await saveRes.json() as {
         zoomLink?: string;
         customZoomLink?: string;
       };
@@ -171,9 +185,9 @@ function InterviewsContent() {
       setEffectiveZoomLink(data.zoomLink ?? "");
       setZoomLinkInput(custom || (data.zoomLink ?? ""));
       setEditingZoom(false);
-      setZoomSaveMessage("Zoom settings saved.");
+      setZoomSaveMessage("Zoom link saved.");
     } catch {
-      setZoomSaveMessage("Could not save Zoom settings. Try again.");
+      setZoomSaveMessage("Could not save zoom link. Try again.");
     } finally {
       setSavingZoom(false);
       setTimeout(() => setZoomSaveMessage(null), 2200);
