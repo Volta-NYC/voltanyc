@@ -14,7 +14,9 @@ export function resolveInterviewZoomSettings(raw: unknown, fallbackEnvLink: stri
 
   const zoomEnabled = typeof settings.zoomEnabled === "boolean" ? settings.zoomEnabled : true;
   const customLink = typeof settings.zoomLink === "string" ? settings.zoomLink.trim() : "";
-  const fallback = fallbackEnvLink.trim() || DEFAULT_INTERVIEW_ZOOM_LINK;
+  // Product requirement: keep one canonical fallback link in code.
+  // Env fallback is only used if the hardcoded default is ever emptied.
+  const fallback = DEFAULT_INTERVIEW_ZOOM_LINK.trim() || fallbackEnvLink.trim();
 
   if (!zoomEnabled) {
     return { zoomEnabled: false, zoomLink: "", source: "disabled" };

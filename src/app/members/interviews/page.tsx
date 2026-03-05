@@ -79,6 +79,74 @@ function fmtHour(h: number): string {
   return `${h % 12 || 12} ${ampm}`;
 }
 
+function fmtHourOption(h: number): string {
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:00 ${ampm}`;
+}
+
+function parseDateInput(raw: string): string | null {
+  const value = raw.trim();
+  if (!value) return null;
+
+  const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const y = Number.parseInt(isoMatch[1], 10);
+    const m = Number.parseInt(isoMatch[2], 10);
+    const d = Number.parseInt(isoMatch[3], 10);
+    const dt = new Date(y, m - 1, d);
+    if (
+      !Number.isNaN(dt.getTime())
+      && dt.getFullYear() === y
+      && dt.getMonth() === m - 1
+      && dt.getDate() === d
+    ) {
+      return toDateString(dt);
+    }
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return toDateString(parsed);
+}
+
+function parseHourInput(raw: string): number | null {
+  const value = raw.trim().toLowerCase();
+  if (!value) return null;
+
+  const match = value.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+  if (!match) return null;
+
+  const hourPart = Number.parseInt(match[1], 10);
+  const minutePart = match[2] ? Number.parseInt(match[2], 10) : 0;
+  const meridiem = match[3] ?? null;
+  if (Number.isNaN(hourPart) || Number.isNaN(minutePart) || minutePart !== 0) return null;
+
+  let hour24 = hourPart;
+  if (meridiem) {
+    if (hourPart < 1 || hourPart > 12) return null;
+    hour24 = hourPart % 12;
+    if (meridiem === "pm") hour24 += 12;
+  } else {
+    if (hourPart < 0 || hourPart > 23) return null;
+  }
+
+  return GRID_HOURS.includes(hour24) ? hour24 : null;
+}
+
+function mapZoomSaveError(code: string): string {
+  if (code.includes("not_authenticated") || code.includes("unauthorized")) {
+    return "Could not save zoom link: sign in again and retry.";
+  }
+  if (code.includes("forbidden")) {
+    return "Could not save zoom link: your account is missing admin/project lead permissions.";
+  }
+  if (code.includes("db_patch_failed")) {
+    return "Could not save zoom link: server could not write interviewSettings in Firebase.";
+  }
+  return "Could not save zoom link. Try again.";
+}
+
 function weekOffsetFromDate(date: Date): number {
   const currentMonday = getMondayForDate(new Date());
   const targetMonday = getMondayForDate(date);
@@ -88,6 +156,7 @@ function weekOffsetFromDate(date: Date): number {
 
 type DragCell = { dateISO: string; hour: number };
 type DragMode = "add" | "remove";
+type DragAnchor = { dayIndex: number; hour: number };
 
 function InterviewsContent() {
   const { user, authRole, loading } = useAuth();
@@ -115,9 +184,15 @@ function InterviewsContent() {
   const [repeatWeeksInput, setRepeatWeeksInput] = useState("1");
   const [batchInterviewer, setBatchInterviewer] = useState("");
   const [applyingBatch, setApplyingBatch] = useState(false);
+  const [manualDateInput, setManualDateInput] = useState(toDateString(new Date()));
+  const [manualTimeInput, setManualTimeInput] = useState("9:00 AM");
+  const [manualRepeatWeeksInput, setManualRepeatWeeksInput] = useState("1");
+  const [manualInterviewer, setManualInterviewer] = useState("");
+  const [manualAddMessage, setManualAddMessage] = useState<string | null>(null);
+  const [addingManualAvailability, setAddingManualAvailability] = useState(false);
   const dragSelectionRef = useRef<Record<string, DragCell>>({});
   const dragModeRef = useRef<DragMode | null>(null);
-  const suppressCellClickUntilRef = useRef(0);
+  const dragAnchorRef = useRef<DragAnchor | null>(null);
 
   const canAccessInterviews = authRole === "admin" || authRole === "project_lead" || authRole === "interviewer";
   const canDeleteInterviews = authRole === "admin" || authRole === "project_lead";
@@ -203,7 +278,8 @@ function InterviewsContent() {
       setZoomLinkInput(custom || (data.zoomLink ?? ""));
       setEditingZoom(false);
       setZoomSaveMessage("Zoom link saved.");
-    } catch {
+    } catch (err) {
+      const code = err instanceof Error ? err.message : "save_failed";
       try {
         await updateInterviewSettings({
           zoomLink: trimmedZoom,
@@ -215,8 +291,9 @@ function InterviewsContent() {
         setZoomLinkInput(trimmedZoom || DEFAULT_INTERVIEW_ZOOM_LINK);
         setEditingZoom(false);
         setZoomSaveMessage("Zoom link saved.");
-      } catch {
-        setZoomSaveMessage("Could not save zoom link. Try again.");
+      } catch (fallbackErr) {
+        console.error("Zoom save failed:", { code, fallbackErr });
+        setZoomSaveMessage(mapZoomSaveError(code));
       }
     } finally {
       setSavingZoom(false);
@@ -262,6 +339,21 @@ function InterviewsContent() {
       ).sort((a, b) => a.localeCompare(b)),
     [teamMembers]
   );
+
+  const typedDateOptions = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const days = MAX_WEEK_OFFSET * 7 + 7;
+    const options: string[] = [];
+    for (let i = 0; i < days; i += 1) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      options.push(toDateString(d));
+    }
+    return options;
+  }, []);
+
+  const typedTimeOptions = useMemo(() => GRID_HOURS.map((hour) => fmtHourOption(hour)), []);
 
   const upcomingBookedSlots = useMemo(
     () => sortedSlots.filter((s) => (s.bookedBy || !s.available) && new Date(s.datetime).getTime() >= now),
@@ -331,14 +423,6 @@ function InterviewsContent() {
     }
   };
 
-  const toggleHour = async (date: Date, hour: number) => {
-    const keys = hourSlotKeys(date, hour);
-    const quarterSlots = keys.map((k) => slotMap[k]).filter(Boolean);
-    const hasVisible = quarterSlots.some((s) => s.available && !s.bookedBy);
-    const mode: DragMode = hasVisible && canDeleteInterviews ? "remove" : "add";
-    await applyHourAction(date, hour, mode);
-  };
-
   const toggleDay = async (date: Date) => {
     const hasVisible = GRID_HOURS.some((hour) =>
       hourSlotKeys(date, hour).some((k) => {
@@ -372,23 +456,45 @@ function InterviewsContent() {
     }
   };
 
-  const ensureHourVisible = async (date: Date, hour: number, interviewerName = "") => {
-    await applyHourAction(date, hour, "add", interviewerName);
-  };
+  const addTypedAvailability = async () => {
+    const normalizedDate = parseDateInput(manualDateInput);
+    const parsedHour = parseHourInput(manualTimeInput);
+    const repeatWeeks = Math.max(1, Math.min(208, Number.parseInt(manualRepeatWeeksInput, 10) || 1));
 
-  const applyPreset = async (startHour: number, endHour: number) => {
-    const range = GRID_HOURS.filter((h) => h >= startHour && h < endHour);
-    for (const date of weekDates) {
-      for (const hour of range) {
-        const hourTs = new Date(toDateString(date) + "T" + String(hour).padStart(2, "0") + ":00").getTime();
-        if (hourTs < now) continue;
+    if (!normalizedDate) {
+      setManualAddMessage("Enter a valid date.");
+      return;
+    }
+    if (parsedHour === null) {
+      setManualAddMessage("Enter a valid hour between 6:00 AM and 11:00 PM.");
+      return;
+    }
+
+    setAddingManualAvailability(true);
+    setManualAddMessage(null);
+
+    let applied = 0;
+    try {
+      for (let week = 0; week < repeatWeeks; week += 1) {
+        const date = new Date(`${normalizedDate}T00:00:00`);
+        date.setDate(date.getDate() + week * 7);
+        const hourTs = new Date(`${toDateString(date)}T${String(parsedHour).padStart(2, "0")}:00`).getTime();
+        if (hourTs < Date.now()) continue;
+
         // eslint-disable-next-line no-await-in-loop
-        await ensureHourVisible(date, hour);
+        await applyHourAction(date, parsedHour, "add", manualInterviewer);
+        applied += 1;
       }
+      setManualDateInput(normalizedDate);
+      setManualTimeInput(fmtHourOption(parsedHour));
+      setManualAddMessage(applied > 0 ? `Added availability for ${applied} week(s).` : "No future hours to add.");
+    } finally {
+      setAddingManualAvailability(false);
+      setTimeout(() => setManualAddMessage(null), 2400);
     }
   };
 
-  const startDragSelection = (date: Date, hour: number, isVisible: boolean, isPastHour: boolean) => {
+  const startDragSelection = (date: Date, dayIndex: number, hour: number, isVisible: boolean, isPastHour: boolean) => {
     if (isPastHour) return;
     if (isVisible && !canDeleteInterviews) return;
     const mode: DragMode = isVisible && canDeleteInterviews ? "remove" : "add";
@@ -398,18 +504,47 @@ function InterviewsContent() {
     dragSelectionRef.current = initial;
     setDragSelection(initial);
     dragModeRef.current = mode;
+    dragAnchorRef.current = { dayIndex, hour };
     setDragMode(mode);
     setDraggingSelection(true);
   };
 
-  const extendDragSelection = (date: Date, hour: number, isVisible: boolean, isPastHour: boolean) => {
+  const extendDragSelection = (dayIndex: number, hour: number, isPastHour: boolean) => {
     if (!draggingSelection || !dragModeRef.current || isPastHour) return;
     const mode = dragModeRef.current;
-    if (mode === "remove" && (!canDeleteInterviews || !isVisible)) return;
-    const dateISO = toDateString(date);
-    const key = `${dateISO}|${hour}`;
-    if (dragSelectionRef.current[key]) return;
-    const next = { ...dragSelectionRef.current, [key]: { dateISO, hour } };
+    const anchor = dragAnchorRef.current;
+    if (!anchor) return;
+    if (mode === "remove" && !canDeleteInterviews) return;
+
+    const minDay = Math.min(anchor.dayIndex, dayIndex);
+    const maxDay = Math.max(anchor.dayIndex, dayIndex);
+    const minHour = Math.min(anchor.hour, hour);
+    const maxHour = Math.max(anchor.hour, hour);
+
+    const next: Record<string, DragCell> = {};
+    for (let day = minDay; day <= maxDay; day += 1) {
+      const cellDate = weekDates[day];
+      if (!cellDate) continue;
+      const dateISO = toDateString(cellDate);
+
+      for (let cellHour = minHour; cellHour <= maxHour; cellHour += 1) {
+        const hourLabel = String(cellHour).padStart(2, "0");
+        const isPastCell = new Date(`${dateISO}T${hourLabel}:59`).getTime() < now;
+        if (isPastCell) continue;
+
+        if (mode === "remove") {
+          const hasVisible = hourSlotKeys(cellDate, cellHour).some((slotKey) => {
+            const slot = slotMap[slotKey];
+            return !!slot && slot.available && !slot.bookedBy;
+          });
+          if (!hasVisible) continue;
+        }
+
+        const key = `${dateISO}|${cellHour}`;
+        next[key] = { dateISO, hour: cellHour };
+      }
+    }
+
     dragSelectionRef.current = next;
     setDragSelection(next);
   };
@@ -417,6 +552,7 @@ function InterviewsContent() {
   const resetDragSelection = () => {
     dragSelectionRef.current = {};
     dragModeRef.current = null;
+    dragAnchorRef.current = null;
     setDragSelection({});
     setDragMode(null);
     setDraggingSelection(false);
@@ -472,8 +608,7 @@ function InterviewsContent() {
     const handlePointerUp = () => {
       setDraggingSelection(false);
       const selectionCount = Object.keys(dragSelectionRef.current).length;
-      if (selectionCount > 1 && dragModeRef.current) {
-        suppressCellClickUntilRef.current = Date.now() + 300;
+      if (selectionCount >= 1 && dragModeRef.current) {
         setRepeatWeeksInput("1");
         if (dragModeRef.current === "add") setBatchInterviewer("");
         setShowBatchModal(true);
@@ -670,44 +805,57 @@ function InterviewsContent() {
 
       {activeTab === "availability" && (
         <div className="space-y-4">
-          <div className="bg-[#1C1F26] border border-white/8 rounded-xl p-4">
-            <p className="text-white/65 text-sm font-semibold">Weekly Availability</p>
-            <p className="text-white/35 text-xs mt-1 font-body">
-              Select hour blocks to control what times are visible on the booking page.
-            </p>
-            {!canDeleteInterviews && (
-              <p className="text-white/35 text-xs mt-1 font-body">
-                Interviewer role can add hours but cannot remove existing visible times.
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2 items-center mt-3">
-              <span className="text-white/40 text-xs font-body mr-1">Quick fill:</span>
-              <button
-                onClick={() => applyPreset(9, 12)}
-                className="px-3 py-1 rounded-lg bg-white/8 hover:bg-white/12 text-white/65 hover:text-white text-xs font-body transition-colors"
-              >
-                Morning (9-12)
-              </button>
-              <button
-                onClick={() => applyPreset(12, 17)}
-                className="px-3 py-1 rounded-lg bg-white/8 hover:bg-white/12 text-white/65 hover:text-white text-xs font-body transition-colors"
-              >
-                Afternoon (12-5)
-              </button>
-              <button
-                onClick={() => applyPreset(9, 17)}
-                className="px-3 py-1 rounded-lg bg-white/8 hover:bg-white/12 text-white/65 hover:text-white text-xs font-body transition-colors"
-              >
-                Business Hours (9-5)
-              </button>
-              <button
-                onClick={() => applyPreset(6, 24)}
-                className="px-3 py-1 rounded-lg bg-white/8 hover:bg-white/12 text-white/65 hover:text-white text-xs font-body transition-colors"
-              >
-                Full Day (6 AM-11 PM)
-              </button>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 items-end">
+            <Field label="Date">
+              <AutocompleteInput
+                value={manualDateInput}
+                onChange={setManualDateInput}
+                options={typedDateOptions}
+                placeholder="YYYY-MM-DD"
+              />
+            </Field>
+            <Field label="Time">
+              <AutocompleteInput
+                value={manualTimeInput}
+                onChange={setManualTimeInput}
+                options={typedTimeOptions}
+                placeholder="e.g. 9:00 AM"
+              />
+            </Field>
+            <Field label="Repeat For (Weeks)">
+              <Input
+                type="number"
+                min={1}
+                max={208}
+                value={manualRepeatWeeksInput}
+                onChange={(e) => setManualRepeatWeeksInput(e.target.value)}
+                inputMode="numeric"
+                className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+            </Field>
+            <Field label="Interviewer Name">
+              <AutocompleteInput
+                value={manualInterviewer}
+                onChange={setManualInterviewer}
+                options={interviewerOptions}
+                placeholder="Start typing interviewer name (optional)"
+              />
+            </Field>
+            <Btn
+              variant="primary"
+              className="w-full justify-center"
+              onClick={() => void addTypedAvailability()}
+              disabled={addingManualAvailability}
+            >
+              {addingManualAvailability ? "Adding..." : "Add Availability"}
+            </Btn>
           </div>
+          {manualAddMessage && <p className="text-xs text-white/55">{manualAddMessage}</p>}
+          {!canDeleteInterviews && (
+            <p className="text-white/35 text-xs font-body">
+              Interviewer role can add hours but cannot remove existing visible times.
+            </p>
+          )}
 
           <div className="flex items-center gap-4 flex-wrap">
             <button
@@ -817,15 +965,11 @@ function InterviewsContent() {
                         onPointerDown={(e) => {
                           if (disabled) return;
                           e.preventDefault();
-                          startDragSelection(day, hour, isVisible, isPastHour);
+                          startDragSelection(day, dayIdx, hour, isVisible, isPastHour);
                         }}
                         onPointerEnter={() => {
                           if (disabled) return;
-                          extendDragSelection(day, hour, isVisible, isPastHour);
-                        }}
-                        onClick={() => {
-                          if (Date.now() < suppressCellClickUntilRef.current) return;
-                          void toggleHour(day, hour);
+                          extendDragSelection(dayIdx, hour, isPastHour);
                         }}
                         title={title}
                         className={`w-full h-11 rounded-none transition-colors ${
@@ -850,8 +994,8 @@ function InterviewsContent() {
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded bg-white/8" />
               {canDeleteInterviews
-                ? "Click to toggle · drag across cells to batch apply recurring changes"
-                : "Click hidden hour blocks (or quick fill) to add visible times · drag for batch add"}
+                ? "Click or drag to select hours, then apply changes in the popup"
+                : "Click or drag hidden hours to select, then apply additions in the popup"}
             </span>
           </div>
         </div>
@@ -873,6 +1017,8 @@ function InterviewsContent() {
               max={208}
               value={repeatWeeksInput}
               onChange={(e) => setRepeatWeeksInput(e.target.value)}
+              inputMode="numeric"
+              className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </Field>
           {dragMode === "add" && (
