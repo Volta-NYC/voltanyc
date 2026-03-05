@@ -9,6 +9,8 @@ import {
   getInviteCodeByValue, updateInviteCode, setUserProfileRecord, type AuthRole,
 } from "@/lib/members/storage";
 
+const GRADE_OPTIONS = ["Freshman", "Sophomore", "Junior", "Senior", "College"];
+
 function isInviteCodeExpired(expiresAt: string): boolean {
   const raw = expiresAt.trim().toLowerCase();
   if (raw === "never") return false;
@@ -188,20 +190,19 @@ export default function SignupPage() {
             <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">
               Grade
             </label>
-            <select
+            <input
               required
+              list="signup-grade-options"
               value={grade}
               onChange={(e) => setGrade(e.target.value)}
-              className="w-full appearance-none bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#85CC17]/50 transition-colors"
-            >
-              <option value="">Select grade</option>
-              <option value="Freshman">Freshman</option>
-              <option value="Sophomore">Sophomore</option>
-              <option value="Junior">Junior</option>
-              <option value="Senior">Senior</option>
-              <option value="College">College</option>
-              <option value="Other">Other</option>
-            </select>
+              className="w-full bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-[#85CC17]/50 transition-colors"
+              placeholder="Start typing grade"
+            />
+            <datalist id="signup-grade-options">
+              {GRADE_OPTIONS.map((option) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
           </div>
 
           <div>
