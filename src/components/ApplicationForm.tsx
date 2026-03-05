@@ -6,7 +6,7 @@ import { validateApplicationForm, type ApplicationFormValues } from "@/lib/schem
 import { TRACK_NAMES } from "@/data";
 
 const REFERRAL_OPTIONS = ["School counselor", "Friend", "Social media", "Online", "Referral", "Other"];
-const GRADE_OPTIONS = ["Freshman", "Sophomore", "Junior", "Senior", "College / Other"];
+const GRADE_OPTIONS = ["Freshman", "Sophomore", "Junior", "Senior", "College"];
 
 const EMPTY: ApplicationFormValues = {
   fullName: "", email: "", city: "", schoolName: "", grade: "", referral: "",
