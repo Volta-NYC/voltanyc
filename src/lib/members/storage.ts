@@ -208,6 +208,7 @@ export interface InterviewSlot {
   bookedBy?: string;      // booking token that reserved this slot
   bookerName?: string;    // name entered by applicant at booking time
   bookerEmail?: string;   // email entered by applicant at booking time
+  interviewerName?: string;
   location?: string;
   createdBy: string;      // uid
   createdAt: number;      // Unix ms timestamp

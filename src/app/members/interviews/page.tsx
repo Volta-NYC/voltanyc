@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import MembersLayout from "@/components/members/MembersLayout";
 import { useAuth } from "@/lib/members/authContext";
 import {
   subscribeInterviewSlots,
+  subscribeTeam,
   createInterviewSlot,
+  updateInterviewSlot,
   deleteBookedInterview,
   deleteInterviewSlot,
+  type TeamMember,
   type InterviewSlot,
 } from "@/lib/members/storage";
-import { Btn, useConfirm } from "@/components/members/ui";
+import { Btn, Field, Input, Modal, Select, useConfirm } from "@/components/members/ui";
 
 function formatDateTime(isoString: string): string {
   const d = new Date(isoString);
@@ -38,12 +41,17 @@ function buildBookingUrl(): string {
   return `${window.location.origin}/book`;
 }
 
+function getMondayForDate(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const dowFromMonday = (d.getDay() + 6) % 7; // Mon=0 ... Sun=6
+  d.setDate(d.getDate() - dowFromMonday);
+  return d;
+}
+
 function getWeekDates(weekOffset: number): Date[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dow = today.getDay();
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - dow + 1 + weekOffset * 7);
+  const monday = getMondayForDate(new Date());
+  monday.setDate(monday.getDate() + weekOffset * 7);
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
@@ -51,7 +59,8 @@ function getWeekDates(weekOffset: number): Date[] {
   });
 }
 
-const GRID_HOURS = Array.from({ length: 12 }, (_, i) => i + 8); // 8 AM -> 7 PM
+const GRID_HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 6 AM -> 11 PM
+const MAX_WEEK_OFFSET = 156; // ~3 years ahead
 
 function toDateString(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -68,6 +77,16 @@ function fmtHour(h: number): string {
   return `${h % 12 || 12} ${ampm}`;
 }
 
+function weekOffsetFromDate(date: Date): number {
+  const currentMonday = getMondayForDate(new Date());
+  const targetMonday = getMondayForDate(date);
+  const diffMs = targetMonday.getTime() - currentMonday.getTime();
+  return Math.floor(diffMs / 604800000);
+}
+
+type DragCell = { dateISO: string; hour: number };
+type DragMode = "add" | "remove";
+
 function InterviewsContent() {
   const { user, authRole, loading } = useAuth();
   const router = useRouter();
@@ -75,6 +94,7 @@ function InterviewsContent() {
 
   const [activeTab, setActiveTab] = useState<"upcoming" | "availability">("upcoming");
   const [slots, setSlots] = useState<InterviewSlot[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
 
   const [copiedBookingLink, setCopiedBookingLink] = useState(false);
   const [zoomLinkInput, setZoomLinkInput] = useState("");
@@ -85,6 +105,18 @@ function InterviewsContent() {
   const [savingZoom, setSavingZoom] = useState(false);
 
   const [slotWeek, setSlotWeek] = useState(0);
+  const [jumpToDate, setJumpToDate] = useState(toDateString(new Date()));
+  const [dragSelection, setDragSelection] = useState<Record<string, DragCell>>({});
+  const [dragMode, setDragMode] = useState<DragMode | null>(null);
+  const [draggingSelection, setDraggingSelection] = useState(false);
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [repeatWeeksInput, setRepeatWeeksInput] = useState("1");
+  const [batchInterviewer, setBatchInterviewer] = useState("");
+  const [applyingBatch, setApplyingBatch] = useState(false);
+  const dragSelectionRef = useRef<Record<string, DragCell>>({});
+  const dragModeRef = useRef<DragMode | null>(null);
+  const suppressCellClickUntilRef = useRef(0);
+
   const canAccessInterviews = authRole === "admin" || authRole === "project_lead" || authRole === "interviewer";
   const canDeleteInterviews = authRole === "admin" || authRole === "project_lead";
   const canEditZoom = authRole === "admin" || authRole === "project_lead";
@@ -96,6 +128,7 @@ function InterviewsContent() {
   }, [canAccessInterviews, loading, router]);
 
   useEffect(() => subscribeInterviewSlots(setSlots), []);
+  useEffect(() => subscribeTeam(setTeamMembers), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,6 +226,18 @@ function InterviewsContent() {
     [slots]
   );
 
+  const interviewerOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          teamMembers
+            .map((member) => member.name?.trim() ?? "")
+            .filter((name) => name.length > 0)
+        )
+      ).sort((a, b) => a.localeCompare(b)),
+    [teamMembers]
+  );
+
   const upcomingBookedSlots = useMemo(
     () => sortedSlots.filter((s) => (s.bookedBy || !s.available) && new Date(s.datetime).getTime() >= now),
     [sortedSlots, now]
@@ -215,75 +260,72 @@ function InterviewsContent() {
     }, "Remove this booked interview and return the time to available?");
   };
 
-  const toggleHour = async (date: Date, hour: number) => {
+  const applyHourAction = async (
+    date: Date,
+    hour: number,
+    mode: DragMode,
+    interviewerName?: string
+  ) => {
     const keys = hourSlotKeys(date, hour);
     const quarterSlots = keys.map((k) => slotMap[k]).filter(Boolean);
     const visibleSlots = quarterSlots.filter((s) => s.available && !s.bookedBy);
+    const cleanInterviewer = interviewerName?.trim() ?? "";
 
-    const missingKeys = keys.filter((k) => !slotMap[k]);
-    if (missingKeys.length > 0 && quarterSlots.some((s) => s.available && !s.bookedBy)) {
-      await Promise.all(
-        missingKeys.map((k) =>
-          createInterviewSlot({
-            datetime: `${k}:00`,
-            durationMinutes: 15,
-            available: true,
-            location: "",
-            createdBy: user?.uid ?? "",
-            createdAt: Date.now(),
-          })
-        )
-      );
-      return;
-    }
-
-    if (visibleSlots.length > 0) {
-      if (!canDeleteInterviews) return;
+    if (mode === "remove") {
+      if (!canDeleteInterviews || visibleSlots.length === 0) return;
       await Promise.all(visibleSlots.map((s) => deleteInterviewSlot(s.id)));
       return;
     }
 
-    if (missingKeys.length > 0) {
-      await Promise.all(
-        missingKeys.map((k) =>
-          createInterviewSlot({
-            datetime: `${k}:00`,
-            durationMinutes: 15,
-            available: true,
-            location: "",
-            createdBy: user?.uid ?? "",
-            createdAt: Date.now(),
-          })
-        )
-      );
+    const updates: Promise<void>[] = [];
+    quarterSlots.forEach((slot) => {
+      if (slot.bookedBy) return;
+      const patch: Partial<InterviewSlot> = {};
+      if (!slot.available) patch.available = true;
+      if (cleanInterviewer && slot.interviewerName !== cleanInterviewer) {
+        patch.interviewerName = cleanInterviewer;
+      }
+      if (Object.keys(patch).length > 0) updates.push(updateInterviewSlot(slot.id, patch));
+    });
+
+    const missingKeys = keys.filter((k) => !slotMap[k]);
+    const creates = missingKeys.map((k) =>
+      createInterviewSlot({
+        datetime: `${k}:00`,
+        durationMinutes: 15,
+        available: true,
+        location: "",
+        interviewerName: cleanInterviewer,
+        createdBy: user?.uid ?? "",
+        createdAt: Date.now(),
+      })
+    );
+
+    if (updates.length > 0 || creates.length > 0) {
+      await Promise.all([...updates, ...creates]);
     }
   };
 
+  const toggleHour = async (date: Date, hour: number) => {
+    const keys = hourSlotKeys(date, hour);
+    const quarterSlots = keys.map((k) => slotMap[k]).filter(Boolean);
+    const hasVisible = quarterSlots.some((s) => s.available && !s.bookedBy);
+    const mode: DragMode = hasVisible && canDeleteInterviews ? "remove" : "add";
+    await applyHourAction(date, hour, mode);
+  };
+
   const toggleDay = async (date: Date) => {
-    const daySlots = GRID_HOURS.flatMap((hour) => hourSlotKeys(date, hour).map((k) => slotMap[k])).filter(Boolean);
-    const removable = daySlots.filter((s) => s.available && !s.bookedBy);
-
-    if (removable.length > 0 && canDeleteInterviews) {
-      await Promise.all(removable.map((s) => deleteInterviewSlot(s.id)));
-      return;
-    }
-
-    await Promise.all(
-      GRID_HOURS.flatMap((hour) =>
-        hourSlotKeys(date, hour)
-          .filter((k) => !slotMap[k])
-          .map((k) =>
-            createInterviewSlot({
-              datetime: `${k}:00`,
-              durationMinutes: 15,
-              available: true,
-              location: "",
-              createdBy: user?.uid ?? "",
-              createdAt: Date.now(),
-            })
-          )
-      )
+    const hasVisible = GRID_HOURS.some((hour) =>
+      hourSlotKeys(date, hour).some((k) => {
+        const slot = slotMap[k];
+        return !!slot && slot.available && !slot.bookedBy;
+      })
     );
+    const mode: DragMode = hasVisible && canDeleteInterviews ? "remove" : "add";
+    for (const hour of GRID_HOURS) {
+      // eslint-disable-next-line no-await-in-loop
+      await applyHourAction(date, hour, mode);
+    }
   };
 
   const toggleHourRow = async (hour: number) => {
@@ -292,50 +334,21 @@ function InterviewsContent() {
       return dt >= now;
     });
 
-    const rowSlots = futureDays
-      .flatMap((d) => hourSlotKeys(d, hour).map((k) => slotMap[k]))
-      .filter(Boolean);
-
-    const removable = rowSlots.filter((s) => s.available && !s.bookedBy);
-    if (removable.length > 0 && canDeleteInterviews) {
-      await Promise.all(removable.map((s) => deleteInterviewSlot(s.id)));
-      return;
-    }
-
-    await Promise.all(
-      futureDays.flatMap((date) => {
-        return hourSlotKeys(date, hour)
-          .filter((k) => !slotMap[k])
-          .map((k) =>
-            createInterviewSlot({
-              datetime: `${k}:00`,
-              durationMinutes: 15,
-              available: true,
-              location: "",
-              createdBy: user?.uid ?? "",
-              createdAt: Date.now(),
-            })
-          );
+    const hasVisible = futureDays.some((date) =>
+      hourSlotKeys(date, hour).some((k) => {
+        const slot = slotMap[k];
+        return !!slot && slot.available && !slot.bookedBy;
       })
     );
+    const mode: DragMode = hasVisible && canDeleteInterviews ? "remove" : "add";
+    for (const date of futureDays) {
+      // eslint-disable-next-line no-await-in-loop
+      await applyHourAction(date, hour, mode);
+    }
   };
 
-  const ensureHourVisible = async (date: Date, hour: number) => {
-    const keys = hourSlotKeys(date, hour);
-    const missingKeys = keys.filter((k) => !slotMap[k]);
-    if (missingKeys.length === 0) return;
-    await Promise.all(
-      missingKeys.map((k) =>
-        createInterviewSlot({
-          datetime: `${k}:00`,
-          durationMinutes: 15,
-          available: true,
-          location: "",
-          createdBy: user?.uid ?? "",
-          createdAt: Date.now(),
-        })
-      )
-    );
+  const ensureHourVisible = async (date: Date, hour: number, interviewerName = "") => {
+    await applyHourAction(date, hour, "add", interviewerName);
   };
 
   const applyPreset = async (startHour: number, endHour: number) => {
@@ -349,6 +362,118 @@ function InterviewsContent() {
       }
     }
   };
+
+  const startDragSelection = (date: Date, hour: number, isVisible: boolean, isPastHour: boolean) => {
+    if (isPastHour) return;
+    if (isVisible && !canDeleteInterviews) return;
+    const mode: DragMode = isVisible && canDeleteInterviews ? "remove" : "add";
+    const dateISO = toDateString(date);
+    const key = `${dateISO}|${hour}`;
+    const initial: Record<string, DragCell> = { [key]: { dateISO, hour } };
+    dragSelectionRef.current = initial;
+    setDragSelection(initial);
+    dragModeRef.current = mode;
+    setDragMode(mode);
+    setDraggingSelection(true);
+  };
+
+  const extendDragSelection = (date: Date, hour: number, isVisible: boolean, isPastHour: boolean) => {
+    if (!draggingSelection || !dragModeRef.current || isPastHour) return;
+    const mode = dragModeRef.current;
+    if (mode === "remove" && (!canDeleteInterviews || !isVisible)) return;
+    const dateISO = toDateString(date);
+    const key = `${dateISO}|${hour}`;
+    if (dragSelectionRef.current[key]) return;
+    const next = { ...dragSelectionRef.current, [key]: { dateISO, hour } };
+    dragSelectionRef.current = next;
+    setDragSelection(next);
+  };
+
+  const resetDragSelection = () => {
+    dragSelectionRef.current = {};
+    dragModeRef.current = null;
+    setDragSelection({});
+    setDragMode(null);
+    setDraggingSelection(false);
+  };
+
+  const closeBatchModal = () => {
+    setShowBatchModal(false);
+    setRepeatWeeksInput("1");
+    setBatchInterviewer("");
+    resetDragSelection();
+  };
+
+  const applyBatchSelection = async () => {
+    if (!dragMode || Object.keys(dragSelection).length === 0) {
+      closeBatchModal();
+      return;
+    }
+
+    const repeatWeeks = Math.max(1, Math.min(208, Number.parseInt(repeatWeeksInput, 10) || 1));
+    const uniqueTargets: Record<string, DragCell> = {};
+
+    Object.values(dragSelection).forEach((cell) => {
+      for (let week = 0; week < repeatWeeks; week += 1) {
+        const date = new Date(`${cell.dateISO}T00:00:00`);
+        date.setDate(date.getDate() + week * 7);
+        const dateISO = toDateString(date);
+        const key = `${dateISO}|${cell.hour}`;
+        uniqueTargets[key] = { dateISO, hour: cell.hour };
+      }
+    });
+
+    setApplyingBatch(true);
+    try {
+      for (const cell of Object.values(uniqueTargets)) {
+        const hourTs = new Date(`${cell.dateISO}T${String(cell.hour).padStart(2, "0")}:00`).getTime();
+        if (hourTs < Date.now()) continue;
+        // eslint-disable-next-line no-await-in-loop
+        await applyHourAction(
+          new Date(`${cell.dateISO}T00:00:00`),
+          cell.hour,
+          dragMode,
+          dragMode === "add" ? batchInterviewer : ""
+        );
+      }
+    } finally {
+      setApplyingBatch(false);
+      closeBatchModal();
+    }
+  };
+
+  useEffect(() => {
+    if (!draggingSelection) return;
+    const handlePointerUp = () => {
+      setDraggingSelection(false);
+      const selectionCount = Object.keys(dragSelectionRef.current).length;
+      if (selectionCount > 1 && dragModeRef.current) {
+        suppressCellClickUntilRef.current = Date.now() + 300;
+        setRepeatWeeksInput("1");
+        if (dragModeRef.current === "add") setBatchInterviewer("");
+        setShowBatchModal(true);
+        setDragMode(dragModeRef.current);
+        return;
+      }
+      resetDragSelection();
+    };
+    window.addEventListener("pointerup", handlePointerUp);
+    return () => window.removeEventListener("pointerup", handlePointerUp);
+  }, [draggingSelection]);
+
+  const onJumpDateChange = (nextDate: string) => {
+    setJumpToDate(nextDate);
+    if (!nextDate) return;
+    const parsed = new Date(`${nextDate}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return;
+    const offset = weekOffsetFromDate(parsed);
+    setSlotWeek(Math.max(0, Math.min(MAX_WEEK_OFFSET, offset)));
+  };
+
+  useEffect(() => {
+    const dates = getWeekDates(slotWeek);
+    setJumpToDate(toDateString(dates[0]));
+  }, [slotWeek]);
 
   const getDayVisibleCount = (date: Date) => {
     const d = toDateString(date);
@@ -497,6 +622,7 @@ function InterviewsContent() {
                         <p className="text-white/45 text-xs font-body mt-0.5">
                           {formatDateTime(slot.datetime)}
                           {slot.bookerEmail ? ` · ${slot.bookerEmail}` : ""}
+                          {slot.interviewerName ? ` · Interviewer: ${slot.interviewerName}` : ""}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
@@ -550,15 +676,15 @@ function InterviewsContent() {
                 Business Hours (9-5)
               </button>
               <button
-                onClick={() => applyPreset(8, 20)}
+                onClick={() => applyPreset(6, 24)}
                 className="px-3 py-1 rounded-lg bg-white/8 hover:bg-white/12 text-white/65 hover:text-white text-xs font-body transition-colors"
               >
-                Full Day (8-8)
+                Full Day (6 AM-11 PM)
               </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <button
               onClick={() => setSlotWeek((w) => Math.max(0, w - 1))}
               disabled={slotWeek === 0}
@@ -571,13 +697,29 @@ function InterviewsContent() {
               {weekDates[6].toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
             </span>
             <button
-              onClick={() => setSlotWeek((w) => Math.min(2, w + 1))}
-              disabled={slotWeek === 2}
+              onClick={() => setSlotWeek((w) => Math.min(MAX_WEEK_OFFSET, w + 1))}
+              disabled={slotWeek === MAX_WEEK_OFFSET}
               className="px-3 py-1.5 rounded-lg bg-white/8 text-white/65 hover:text-white hover:bg-white/12 transition-colors text-sm disabled:opacity-30"
             >
               Next →
             </button>
+            <button
+              onClick={() => setSlotWeek(0)}
+              className="px-3 py-1.5 rounded-lg bg-white/8 text-white/65 hover:text-white hover:bg-white/12 transition-colors text-sm"
+            >
+              Today
+            </button>
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-white/35 text-xs font-body">Jump to week:</span>
+              <input
+                type="date"
+                value={jumpToDate}
+                onChange={(e) => onJumpDateChange(e.target.value)}
+                className="bg-[#0F1014] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#85CC17]/45"
+              />
+            </div>
           </div>
+          <p className="text-white/30 text-xs font-body">Planning window: up to 3 years ahead.</p>
 
           <div className="bg-[#1C1F26] border border-white/8 rounded-xl overflow-hidden">
             <div className="grid border-b border-white/8" style={{ gridTemplateColumns: "64px repeat(7, 1fr)" }}>
@@ -628,6 +770,8 @@ function InterviewsContent() {
                   const cannotRemoveVisible = !canDeleteInterviews && isVisible;
                   const disabled = isPastHour || cannotRemoveVisible;
                   const isPartiallyVisible = visibleCount > 0 && visibleCount < 4;
+                  const selectionKey = `${d}|${hour}`;
+                  const isSelectedInDrag = !!dragSelection[selectionKey];
 
                   let cellClass = "bg-white/10 hover:bg-white/25";
                   if (isVisible) cellClass = "bg-[#85CC17]/70 hover:bg-[#85CC17]/45";
@@ -645,11 +789,26 @@ function InterviewsContent() {
                     <div key={dayIdx} className="relative border-l border-white/6">
                       <button
                         disabled={disabled}
-                        onClick={() => toggleHour(day, hour)}
+                        onPointerDown={(e) => {
+                          if (disabled) return;
+                          e.preventDefault();
+                          startDragSelection(day, hour, isVisible, isPastHour);
+                        }}
+                        onPointerEnter={() => {
+                          if (disabled) return;
+                          extendDragSelection(day, hour, isVisible, isPastHour);
+                        }}
+                        onClick={() => {
+                          if (Date.now() < suppressCellClickUntilRef.current) return;
+                          void toggleHour(day, hour);
+                        }}
                         title={title}
                         className={`w-full h-11 rounded-none transition-colors ${
                           disabled ? `${cellClass} cursor-default ${isPastHour ? "opacity-20" : "opacity-70"}` : `${cellClass} cursor-pointer`
-                        }`}
+                        } ${isSelectedInDrag ? "ring-2 ring-inset ring-[#85CC17]" : ""}`}
+                        style={{
+                          touchAction: "none",
+                        }}
                       />
                     </div>
                   );
@@ -666,12 +825,62 @@ function InterviewsContent() {
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded bg-white/8" />
               {canDeleteInterviews
-                ? "Click hour blocks to toggle full hours · click day header to toggle day"
-                : "Click hidden hour blocks (or quick fill) to add visible times"}
+                ? "Click to toggle · drag across cells to batch apply recurring changes"
+                : "Click hidden hour blocks (or quick fill) to add visible times · drag for batch add"}
             </span>
           </div>
         </div>
       )}
+
+      <Modal
+        open={showBatchModal}
+        onClose={closeBatchModal}
+        title={dragMode === "remove" ? "Remove Selected Availability" : "Add Selected Availability"}
+      >
+        <div className="space-y-4">
+          <p className="text-white/55 text-sm font-body">
+            {Object.keys(dragSelection).length} hour blocks selected in this week.
+          </p>
+          <Field label="Repeat For (Weeks)">
+            <Input
+              type="number"
+              min={1}
+              max={208}
+              value={repeatWeeksInput}
+              onChange={(e) => setRepeatWeeksInput(e.target.value)}
+            />
+          </Field>
+          {dragMode === "add" && (
+            <Field label="Interviewer Name">
+              {interviewerOptions.length > 0 ? (
+                <Select
+                  options={interviewerOptions}
+                  value={batchInterviewer}
+                  onChange={(e) => setBatchInterviewer(e.target.value)}
+                />
+              ) : (
+                <Input
+                  value={batchInterviewer}
+                  onChange={(e) => setBatchInterviewer(e.target.value)}
+                  placeholder="Optional interviewer assignment"
+                />
+              )}
+            </Field>
+          )}
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <Btn variant="ghost" onClick={closeBatchModal} disabled={applyingBatch}>
+            Cancel
+          </Btn>
+          <Btn
+            variant={dragMode === "remove" ? "danger" : "primary"}
+            onClick={applyBatchSelection}
+            disabled={applyingBatch}
+          >
+            {applyingBatch ? "Applying..." : "Apply"}
+          </Btn>
+        </div>
+      </Modal>
     </>
   );
 }
