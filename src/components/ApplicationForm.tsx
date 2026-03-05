@@ -5,10 +5,11 @@ import { CheckIcon } from "@/components/Icons";
 import { validateApplicationForm, type ApplicationFormValues } from "@/lib/schemas";
 import { TRACK_NAMES } from "@/data";
 
-const REFERRAL_OPTIONS = ["School counselor", "Friend", "Social media", "Referral", "Other"];
+const REFERRAL_OPTIONS = ["School counselor", "Friend", "Social media", "Online", "Referral", "Other"];
+const GRADE_OPTIONS = ["Freshman", "Sophomore", "Junior", "Senior", "College / Other"];
 
 const EMPTY: ApplicationFormValues = {
-  fullName: "", email: "", city: "", schoolName: "", referral: "",
+  fullName: "", email: "", city: "", schoolName: "", grade: "", referral: "",
   tracks: [], hasResume: null, tools: "", accomplishment: "",
 };
 
@@ -60,6 +61,7 @@ export default function ApplicationForm() {
       "Full Name": form.fullName,
       Email: form.email,
       "School Name": form.schoolName,
+      Grade: form.grade,
       "City, State": form.city,
       "How They Heard": form.referral,
       "Tracks Selected": form.tracks.join(", "),
@@ -129,6 +131,31 @@ export default function ApplicationForm() {
           placeholder="e.g. Stuyvesant High School"
         />
         {errors.schoolName && <p className="text-red-500 text-xs mt-1 font-body">{errors.schoolName}</p>}
+      </div>
+
+      <div>
+        <label className="block font-body text-sm font-semibold text-v-ink mb-2">Grade *</label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {GRADE_OPTIONS.map((grade) => {
+            const active = form.grade === grade;
+            return (
+              <button
+                key={grade}
+                type="button"
+                onClick={() => { set("grade", grade); clearError("grade"); }}
+                className={`w-full text-left px-4 py-3 rounded-xl border font-body text-sm font-medium transition-all flex items-center gap-3 ${
+                  active ? "bg-v-green/10 border-v-green text-v-ink" : "bg-white border-v-border text-v-muted hover:border-v-ink"
+                }`}
+              >
+                <span className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${active ? "bg-v-green border-v-green" : "border-v-border"}`}>
+                  {active && <CheckIcon className="w-3 h-3 text-v-ink" />}
+                </span>
+                {grade}
+              </button>
+            );
+          })}
+        </div>
+        {errors.grade && <p className="text-red-500 text-xs mt-2 font-body">{errors.grade}</p>}
       </div>
 
       <div>
