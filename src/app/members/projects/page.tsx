@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import MembersLayout from "@/components/members/MembersLayout";
 import {
   PageHeader, SearchBar, Badge, Btn, Modal, Field, Input, Select, TextArea,
-  Empty, StatCard, TagInput, useConfirm,
+  Empty, StatCard, TagInput, AutocompleteInput, AutocompleteTagInput, useConfirm,
 } from "@/components/members/ui";
 import {
   subscribeBusinesses, subscribeTeam, createBusiness, updateBusiness, deleteBusiness, type Business, type TeamMember,
@@ -409,7 +409,12 @@ export default function BusinessesPage() {
             <Select options={PRIORITIES} value={form.priority} onChange={e => setField("priority", e.target.value)} />
           </Field>
           <Field label="Team Lead">
-            <Input value={form.teamLead} onChange={e => setField("teamLead", e.target.value)} />
+            <AutocompleteInput
+              value={form.teamLead}
+              onChange={(value) => setField("teamLead", value)}
+              options={teamNameOptions}
+              placeholder="Start typing a member name"
+            />
           </Field>
           <Field label="Start Date">
             <Input type="date" value={form.startDate ?? ""} onChange={e => setField("startDate", e.target.value)} />
@@ -433,12 +438,12 @@ export default function BusinessesPage() {
           </Field>
           <div className="col-span-2">
             <Field label="Assigned Members">
-              <TagInput
+              <AutocompleteTagInput
                 values={form.teamMembers ?? []}
                 onChange={v => setField("teamMembers", v)}
                 options={teamNameOptions}
                 commitOnBlur
-                customPlaceholder="Type a name not in directory, then Enter"
+                placeholder="Type a member name, then Enter"
               />
             </Field>
           </div>

@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import MembersLayout from "@/components/members/MembersLayout";
 import {
   PageHeader, SearchBar, Badge, Btn, Modal, Field, Input, Select, TextArea,
-  Table, Empty, useConfirm,
+  Table, Empty, AutocompleteInput, useConfirm,
 } from "@/components/members/ui";
 import {
-  subscribeTasks, createTask, updateTask, deleteTask, type Task,
+  subscribeTasks, subscribeTeam, createTask, updateTask, deleteTask, type Task, type TeamMember,
 } from "@/lib/members/storage";
 import { useAuth } from "@/lib/members/authContext";
 
@@ -42,6 +42,7 @@ function normalizeStatus(status: Task["status"]): BoardStatus {
 
 export default function TasksPage() {
   const [tasks, setTasks]             = useState<Task[]>([]);
+  const [team, setTeam]               = useState<TeamMember[]>([]);
   const [search, setSearch]           = useState("");
   const [filterDiv, setFilterDiv]     = useState("");
   const [view, setView]               = useState<"board" | "table">("board");
@@ -64,6 +65,19 @@ export default function TasksPage() {
 
   // Subscribe to real-time task updates; unsubscribe on unmount.
   useEffect(() => subscribeTasks(setTasks), []);
+  useEffect(() => subscribeTeam(setTeam), []);
+
+  const memberNameOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          team
+            .map((member) => member.name?.trim() ?? "")
+            .filter((name) => name.length > 0)
+        )
+      ).sort((a, b) => a.localeCompare(b)),
+    [team]
+  );
 
   // Generic field updater used by all form inputs.
   const setField = (key: string, value: unknown) =>
@@ -297,7 +311,12 @@ export default function TasksPage() {
             <Select options={DIVISIONS} value={form.division} onChange={e => setField("division", e.target.value)} />
           </Field>
           <Field label="Assigned To">
-            <Input value={form.assignedTo} onChange={e => setField("assignedTo", e.target.value)} placeholder="Name or @handle" />
+            <AutocompleteInput
+              value={form.assignedTo}
+              onChange={(value) => setField("assignedTo", value)}
+              options={memberNameOptions}
+              placeholder="Start typing a member name"
+            />
           </Field>
           <Field label="Due Date">
             <Input type="date" value={form.dueDate} onChange={e => setField("dueDate", e.target.value)} />

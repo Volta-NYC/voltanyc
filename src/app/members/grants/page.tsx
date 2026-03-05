@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import MembersLayout from "@/components/members/MembersLayout";
 import {
   PageHeader, SearchBar, Badge, Btn, Modal, Field, Input, Select, TextArea,
-  Table, Empty, StatCard, TagInput, useConfirm,
+  Table, Empty, StatCard, TagInput, AutocompleteInput, useConfirm,
 } from "@/components/members/ui";
 import {
   subscribeGrants, createGrant, updateGrant, deleteGrant, type Grant,
-  subscribeBusinesses, type Business,
+  subscribeBusinesses, subscribeTeam, type Business, type TeamMember,
 } from "@/lib/members/storage";
 import { useAuth } from "@/lib/members/authContext";
 
@@ -35,6 +35,7 @@ const BLANK_FORM: Omit<Grant, "id" | "createdAt"> = {
 export default function GrantsPage() {
   const [grants, setGrants]             = useState<Grant[]>([]);
   const [businesses, setBusinesses]     = useState<Business[]>([]);
+  const [team, setTeam]                 = useState<TeamMember[]>([]);
   const [search, setSearch]             = useState("");
   const [modal, setModal]               = useState<"create" | "edit" | null>(null);
   const [editingGrant, setEditingGrant] = useState<Grant | null>(null);
@@ -59,8 +60,21 @@ export default function GrantsPage() {
   useEffect(() => {
     const unsubGrants = subscribeGrants(setGrants);
     const unsubBusinesses = subscribeBusinesses(setBusinesses);
-    return () => { unsubGrants(); unsubBusinesses(); };
+    const unsubTeam = subscribeTeam(setTeam);
+    return () => { unsubGrants(); unsubBusinesses(); unsubTeam(); };
   }, []);
+
+  const memberNameOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          team
+            .map((member) => member.name?.trim() ?? "")
+            .filter((name) => name.length > 0)
+        )
+      ).sort((a, b) => a.localeCompare(b)),
+    [team]
+  );
 
   // Generic field updater used by all form inputs.
   const setField = (key: string, value: unknown) =>
@@ -213,7 +227,12 @@ export default function GrantsPage() {
             <Select options={FREQUENCIES} value={form.cycleFrequency} onChange={e => setField("cycleFrequency", e.target.value)} />
           </Field>
           <Field label="Assigned Researcher">
-            <Input value={form.assignedResearcher} onChange={e => setField("assignedResearcher", e.target.value)} />
+            <AutocompleteInput
+              value={form.assignedResearcher}
+              onChange={(value) => setField("assignedResearcher", value)}
+              options={memberNameOptions}
+              placeholder="Start typing a member name"
+            />
           </Field>
           <div className="col-span-2">
             <Field label="Application URL">

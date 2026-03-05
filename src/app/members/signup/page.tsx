@@ -9,6 +9,14 @@ import {
   getInviteCodeByValue, updateInviteCode, setUserProfileRecord, type AuthRole,
 } from "@/lib/members/storage";
 
+function isInviteCodeExpired(expiresAt: string): boolean {
+  const raw = expiresAt.trim().toLowerCase();
+  if (raw === "never") return false;
+  const t = new Date(expiresAt).getTime();
+  if (Number.isNaN(t)) return true;
+  return t < Date.now();
+}
+
 export default function SignupPage() {
   const [code, setCode] = useState("");
   const [email, setEmail] = useState("");
@@ -36,7 +44,7 @@ export default function SignupPage() {
     try {
       const invite = await getInviteCodeByValue(normalizedCode);
       if (!invite)                                   { setError("Invalid invite code."); setLoading(false); return; }
-      if (new Date(invite.expiresAt) < new Date())   { setError("This invite code has expired."); setLoading(false); return; }
+      if (isInviteCodeExpired(invite.expiresAt))      { setError("This invite code has expired."); setLoading(false); return; }
       inviteRole = invite.role;
     } catch {
       setError("Could not verify invite code. Please try again or contact an admin.");

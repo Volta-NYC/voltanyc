@@ -22,9 +22,17 @@ function generateInviteCode(): string {
 }
 
 // Returns a display string for the current state of an invite code.
+function isInviteCodeExpired(expiresAt: string): boolean {
+  const raw = expiresAt.trim().toLowerCase();
+  if (raw === "never") return false;
+  const t = new Date(expiresAt).getTime();
+  if (Number.isNaN(t)) return true;
+  return t < Date.now();
+}
+
 function getCodeStatus(code: InviteCode): string {
   if (code.used) return "Used";
-  if (new Date(code.expiresAt) < new Date()) return "Expired";
+  if (isInviteCodeExpired(code.expiresAt)) return "Expired";
   return "Active";
 }
 
@@ -48,8 +56,9 @@ function AccessCodesTab({ uid }: { uid: string }) {
 
   const handleGenerate = async () => {
     const code      = generateInviteCode();
-    const expiresAt = new Date(Date.now() + parseInt(expireDays) * 86400000)
-      .toISOString().split("T")[0];
+    const expiresAt = expireDays === "Never"
+      ? "never"
+      : new Date(Date.now() + parseInt(expireDays, 10) * 86400000).toISOString().split("T")[0];
     await createInviteCode({
       code,
       role:      newRole,
@@ -88,7 +97,7 @@ function AccessCodesTab({ uid }: { uid: string }) {
           </Field>
           <Field label="Expires in">
             <Select
-              options={["1", "3", "7", "14", "30"]}
+              options={["1", "3", "7", "14", "30", "Never"]}
               value={expireDays}
               onChange={e => setExpireDays(e.target.value)}
             />
@@ -105,7 +114,7 @@ function AccessCodesTab({ uid }: { uid: string }) {
           return [
             <span key="code" className="font-mono text-white tracking-widest text-sm">{code.code}</span>,
             <Badge key="role" label={code.role} />,
-            <span key="exp" className="text-white/40 text-xs">{code.expiresAt}</span>,
+            <span key="exp" className="text-white/40 text-xs">{code.expiresAt.trim().toLowerCase() === "never" ? "Never" : code.expiresAt}</span>,
             <span key="status" className={`text-xs font-medium ${getCodeStatusColor(status)}`}>{status}</span>,
             <span key="usedBy" className="text-white/30 text-xs">{code.usedBy ?? "—"}</span>,
             <div key="actions" className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

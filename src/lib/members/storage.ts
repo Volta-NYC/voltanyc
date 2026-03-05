@@ -160,7 +160,7 @@ export interface InviteCode {
   id: string;
   code: string;     // e.g. "VOLTA-AB3X7C"
   role: AuthRole;
-  expiresAt: string;  // ISO date string
+  expiresAt: string;  // ISO date string, or "never"
   used: boolean;
   usedBy?: string;    // email address of the user who redeemed it
   usedAt?: string;

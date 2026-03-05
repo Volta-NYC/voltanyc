@@ -15,7 +15,7 @@ import {
   type TeamMember,
   type InterviewSlot,
 } from "@/lib/members/storage";
-import { Btn, Field, Input, Modal, Select, useConfirm } from "@/components/members/ui";
+import { Btn, Field, Input, Modal, AutocompleteInput, useConfirm } from "@/components/members/ui";
 import { DEFAULT_INTERVIEW_ZOOM_LINK } from "@/lib/interviews/config";
 
 function formatDateTime(isoString: string): string {
@@ -877,19 +877,12 @@ function InterviewsContent() {
           </Field>
           {dragMode === "add" && (
             <Field label="Interviewer Name">
-              {interviewerOptions.length > 0 ? (
-                <Select
-                  options={interviewerOptions}
-                  value={batchInterviewer}
-                  onChange={(e) => setBatchInterviewer(e.target.value)}
-                />
-              ) : (
-                <Input
-                  value={batchInterviewer}
-                  onChange={(e) => setBatchInterviewer(e.target.value)}
-                  placeholder="Optional interviewer assignment"
-                />
-              )}
+              <AutocompleteInput
+                value={batchInterviewer}
+                onChange={(value) => setBatchInterviewer(value)}
+                options={interviewerOptions}
+                placeholder="Start typing interviewer name (optional)"
+              />
             </Field>
           )}
         </div>

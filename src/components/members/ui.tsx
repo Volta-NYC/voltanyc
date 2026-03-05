@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ReactNode, useEffect } from "react";
+import { useState, ReactNode, useEffect, useId } from "react";
 
 // ── BADGE ─────────────────────────────────────────────────────────────────────
 // Maps status/priority/role strings to their Tailwind color classes.
@@ -171,6 +171,121 @@ export function SearchBar({ value, onChange, placeholder = "Search…" }: {
         placeholder={placeholder}
         className="w-full bg-[#1C1F26] border border-white/8 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#85CC17]/40 transition-colors"
       />
+    </div>
+  );
+}
+
+// ── TYPEAHEAD INPUTS ─────────────────────────────────────────────────────────
+// Browser-native datalist typeahead used for member-directory-backed fields.
+
+export function AutocompleteInput({
+  value,
+  onChange,
+  options,
+  placeholder = "Start typing…",
+  className = "",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+  placeholder?: string;
+  className?: string;
+}) {
+  const listId = `ac-${useId().replace(/[:]/g, "")}`;
+  const normalizedOptions = Array.from(
+    new Set(
+      (options ?? [])
+        .map((option) => option.trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
+  return (
+    <div className="w-full">
+      <input
+        list={listId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`w-full bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-[#85CC17]/50 transition-colors ${className}`}
+      />
+      <datalist id={listId}>
+        {normalizedOptions.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
+    </div>
+  );
+}
+
+export function AutocompleteTagInput({
+  values,
+  onChange,
+  options,
+  commitOnBlur = false,
+  placeholder = "Type to search, then press Enter",
+}: {
+  values: string[];
+  onChange: (values: string[]) => void;
+  options: string[];
+  commitOnBlur?: boolean;
+  placeholder?: string;
+}) {
+  const [inputText, setInputText] = useState("");
+  const listId = `tag-ac-${useId().replace(/[:]/g, "")}`;
+  const safeValues = values ?? [];
+
+  const normalizedOptions = Array.from(
+    new Set(
+      (options ?? [])
+        .map((option) => option.trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
+  const addTag = (raw: string) => {
+    const tag = raw.trim();
+    if (tag && !safeValues.includes(tag)) onChange([...safeValues, tag]);
+    setInputText("");
+  };
+
+  const removeTag = (tag: string) => onChange(safeValues.filter((value) => value !== tag));
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {safeValues.map((tag) => (
+          <span key={tag} className="flex items-center gap-1 text-xs bg-[#85CC17]/15 text-[#85CC17] border border-[#85CC17]/20 px-2 py-0.5 rounded-full">
+            {tag}
+            <button type="button" onClick={() => removeTag(tag)} className="hover:text-red-400 transition-colors">×</button>
+          </span>
+        ))}
+      </div>
+
+      <input
+        list={listId}
+        value={inputText}
+        onChange={(e) => setInputText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === "," || e.key === "Tab") {
+            e.preventDefault();
+            addTag(inputText);
+          }
+        }}
+        onBlur={() => {
+          if (commitOnBlur) addTag(inputText);
+        }}
+        placeholder={placeholder}
+        className="w-full bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-[#85CC17]/50"
+      />
+
+      <datalist id={listId}>
+        {normalizedOptions
+          .filter((option) => !safeValues.includes(option))
+          .map((option) => (
+            <option key={option} value={option} />
+          ))}
+      </datalist>
     </div>
   );
 }
