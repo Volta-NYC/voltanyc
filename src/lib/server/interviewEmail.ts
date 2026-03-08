@@ -206,3 +206,48 @@ export async function sendInterviewReminderEmail(input: BookingEmailInput): Prom
     },
   });
 }
+
+export async function sendInterviewRescheduledEmail(input: BookingEmailInput & {
+  previousDatetimeIso: string;
+}): Promise<void> {
+  const newTimeText = formatTime(input.datetimeIso);
+  const oldTimeText = formatTime(input.previousDatetimeIso);
+  const googleCalendarUrl = buildGoogleCalendarUrl(input);
+  const ics = buildIcs(input);
+
+  await sendInterviewEmail({
+    to: input.to,
+    subject: "Volta NYC Interview Rescheduled",
+    text: [
+      `Hi ${input.bookerName || "there"},`,
+      "",
+      "Your Volta NYC interview has been rescheduled.",
+      `Previous time: ${oldTimeText}`,
+      `New time: ${newTimeText}`,
+      input.zoomLink ? `Zoom: ${input.zoomLink}` : "Zoom: (will be provided separately)",
+      "",
+      `Google Calendar: ${googleCalendarUrl}`,
+      "A fresh calendar invite (.ics) is attached.",
+      "",
+      "- Volta NYC",
+    ].join("\n"),
+    html: `
+      <p>Hi ${input.bookerName || "there"},</p>
+      <p>Your <strong>Volta NYC interview</strong> has been rescheduled.</p>
+      <p>
+        <strong>Previous time:</strong> ${oldTimeText}<br/>
+        <strong>New time:</strong> ${newTimeText}<br/>
+        <strong>Zoom:</strong> ${input.zoomLink ? `<a href="${input.zoomLink}">${input.zoomLink}</a>` : "will be provided separately"}
+      </p>
+      <p>
+        <a href="${googleCalendarUrl}">Open in Google Calendar</a><br/>
+        A fresh calendar invite (<code>.ics</code>) is attached.
+      </p>
+      <p>- Volta NYC</p>
+    `,
+    ics: {
+      filename: "volta-nyc-interview-rescheduled.ics",
+      content: ics,
+    },
+  });
+}

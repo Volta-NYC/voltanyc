@@ -504,7 +504,7 @@ export default function BookPage() {
 
             <div className="px-6 pb-6">
               <p className="text-white/25 text-xs text-center font-body">
-                Need to reschedule? Contact us at <span className="text-white/40">info@voltanyc.org</span>
+                Need to reschedule? Book a new time with the same email and your old slot will be replaced automatically.
               </p>
             </div>
           </div>

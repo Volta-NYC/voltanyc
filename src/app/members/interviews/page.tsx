@@ -164,6 +164,25 @@ function mapZoomSaveError(code: string): string {
   return "Could not save zoom link. Try again.";
 }
 
+function parseInterviewerNames(raw: string): string[] {
+  if (!raw.trim()) return [];
+  const parts = raw
+    .split(/[,\n]/g)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return Array.from(new Set(parts));
+}
+
+function getSlotInterviewerNames(slot: InterviewSlot): string[] {
+  if (Array.isArray(slot.interviewerNames) && slot.interviewerNames.length > 0) {
+    return slot.interviewerNames
+      .map((name) => String(name ?? "").trim())
+      .filter(Boolean);
+  }
+  const fallback = String(slot.interviewerName ?? "").trim();
+  return fallback ? [fallback] : [];
+}
+
 function weekOffsetFromDate(date: Date, referenceDate: Date): number {
   const currentMonday = getMondayForDate(referenceDate);
   const targetMonday = getMondayForDate(date);
@@ -192,6 +211,10 @@ function InterviewsContent() {
   const [copiedZoom, setCopiedZoom] = useState(false);
   const [zoomSaveMessage, setZoomSaveMessage] = useState<string | null>(null);
   const [savingZoom, setSavingZoom] = useState(false);
+  const [rescheduleSourceSlot, setRescheduleSourceSlot] = useState<InterviewSlot | null>(null);
+  const [rescheduleTargetSlotId, setRescheduleTargetSlotId] = useState("");
+  const [rescheduleMessage, setRescheduleMessage] = useState<string | null>(null);
+  const [rescheduling, setRescheduling] = useState(false);
 
   const [slotWeek, setSlotWeek] = useState(0);
   const [windowAnchor, setWindowAnchor] = useState(() => new Date());
@@ -395,7 +418,7 @@ function InterviewsContent() {
   );
 
   const upcomingBookedSlots = useMemo(
-    () => sortedSlots.filter((s) => (s.bookedBy || !s.available) && new Date(s.datetime).getTime() >= now),
+    () => sortedSlots.filter((s) => !!s.bookedBy && new Date(s.datetime).getTime() >= now),
     [sortedSlots, now]
   );
 
@@ -409,6 +432,12 @@ function InterviewsContent() {
     return Object.entries(byDate).sort((a, b) => a[0].localeCompare(b[0]));
   }, [upcomingBookedSlots]);
 
+  const availableFutureSlots = useMemo(
+    () =>
+      sortedSlots.filter((s) => s.available && !s.bookedBy && new Date(s.datetime).getTime() > now),
+    [sortedSlots, now]
+  );
+
   const cancelBookedInterview = (slot: InterviewSlot) => {
     if (!canDeleteInterviews) return;
     ask(async () => {
@@ -416,16 +445,65 @@ function InterviewsContent() {
     }, "Remove this booked interview and return the time to available?");
   };
 
+  const startReschedule = (slot: InterviewSlot) => {
+    setRescheduleSourceSlot(slot);
+    const first = availableFutureSlots[0];
+    setRescheduleTargetSlotId(first?.id ?? "");
+    setRescheduleMessage(null);
+  };
+
+  const applyReschedule = async () => {
+    if (!rescheduleSourceSlot || !rescheduleTargetSlotId) return;
+    setRescheduling(true);
+    setRescheduleMessage(null);
+    try {
+      const token = await user?.getIdToken();
+      if (!token) {
+        setRescheduleMessage("Could not reschedule: not authenticated.");
+        return;
+      }
+      const res = await fetch("/api/booking/reschedule", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          fromSlotId: rescheduleSourceSlot.id,
+          toSlotId: rescheduleTargetSlotId,
+        }),
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({} as { error?: string }));
+        const code = data.error ?? "save_failed";
+        if (code === "target_unavailable") setRescheduleMessage("Selected target time is no longer available.");
+        else if (code === "source_not_booked") setRescheduleMessage("Original interview is no longer booked.");
+        else setRescheduleMessage("Could not reschedule interview.");
+        return;
+      }
+      setRescheduleMessage("Interview rescheduled.");
+      setRescheduleSourceSlot(null);
+      setRescheduleTargetSlotId("");
+    } catch {
+      setRescheduleMessage("Could not reschedule interview.");
+    } finally {
+      setRescheduling(false);
+      setTimeout(() => setRescheduleMessage(null), 2200);
+    }
+  };
+
   const applySlotAction = async (
     dateISO: string,
     hour: number,
     minute: number,
     mode: DragMode,
-    interviewerName?: string
+    interviewerInput?: string
   ) => {
     const key = slotKey(dateISO, hour, minute);
     const slot = slotMap[key];
-    const cleanInterviewer = interviewerName?.trim() ?? "";
+    const interviewerNames = parseInterviewerNames(interviewerInput ?? "");
+    const legacyInterviewer = interviewerNames[0] ?? "";
 
     if (mode === "remove") {
       if (!canDeleteInterviews || !slot || !slot.available || slot.bookedBy) return;
@@ -437,8 +515,15 @@ function InterviewsContent() {
       if (slot.bookedBy) return;
       const patch: Partial<InterviewSlot> = {};
       if (!slot.available) patch.available = true;
-      if (cleanInterviewer && slot.interviewerName !== cleanInterviewer) {
-        patch.interviewerName = cleanInterviewer;
+      const currentNames = getSlotInterviewerNames(slot);
+      if (interviewerNames.length > 0) {
+        const same =
+          currentNames.length === interviewerNames.length
+          && currentNames.every((value, idx) => value === interviewerNames[idx]);
+        if (!same) {
+          patch.interviewerNames = interviewerNames;
+          patch.interviewerName = legacyInterviewer;
+        }
       }
       if (Object.keys(patch).length > 0) {
         await updateInterviewSlot(slot.id, patch);
@@ -451,7 +536,8 @@ function InterviewsContent() {
       durationMinutes: 15,
       available: true,
       location: "",
-      interviewerName: cleanInterviewer,
+      interviewerName: legacyInterviewer,
+      interviewerNames,
       createdBy: user?.uid ?? "",
       createdAt: Date.now(),
     });
@@ -752,6 +838,20 @@ function InterviewsContent() {
     return visible;
   };
 
+  const getHourVisibleCount = (hour: number) => {
+    let visible = 0;
+    for (const day of weekDates) {
+      const d = toDateString(day);
+      for (const minute of QUARTER_MINUTES) {
+        const slot = slotMap[slotKey(d, hour, minute)];
+        if (!slot) continue;
+        if (new Date(slot.datetime).getTime() < now) continue;
+        if (slot.available && !slot.bookedBy) visible += 1;
+      }
+    }
+    return visible;
+  };
+
   const TABS: { key: "upcoming" | "availability"; label: string }[] = [
     { key: "upcoming", label: "Upcoming Interviews" },
     { key: "availability", label: "Availability" },
@@ -881,6 +981,7 @@ function InterviewsContent() {
               <div className="space-y-2">
                 {daySlots.map((slot) => {
                   const displayName = slot.bookerName?.trim() || "Interviewee";
+                  const slotInterviewers = getSlotInterviewerNames(slot);
                   return (
                     <div key={slot.id} className="bg-[#1C1F26] border border-white/8 rounded-xl px-4 py-3 flex items-center gap-3">
                       <div className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
@@ -889,14 +990,21 @@ function InterviewsContent() {
                         <p className="text-white/45 text-xs font-body mt-0.5">
                           {formatDateTime(slot.datetime)}
                           {slot.bookerEmail ? ` · ${slot.bookerEmail}` : ""}
-                          {slot.interviewerName ? ` · Interviewer: ${slot.interviewerName}` : ""}
+                          {slotInterviewers.length > 0
+                            ? ` · Interviewer${slotInterviewers.length > 1 ? "s" : ""}: ${slotInterviewers.join(", ")}`
+                            : ""}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {canDeleteInterviews ? (
-                          <Btn size="sm" variant="danger" onClick={() => cancelBookedInterview(slot)}>
-                            Cancel
-                          </Btn>
+                          <>
+                            <Btn size="sm" variant="secondary" onClick={() => startReschedule(slot)}>
+                              Move
+                            </Btn>
+                            <Btn size="sm" variant="danger" onClick={() => cancelBookedInterview(slot)}>
+                              Cancel
+                            </Btn>
+                          </>
                         ) : (
                           <span className="text-white/30 text-xs font-body">View only</span>
                         )}
@@ -945,14 +1053,14 @@ function InterviewsContent() {
                 placeholder="e.g. 10:00 AM"
               />
             </Field>
-            <Field label="Interviewer Name">
-              <AutocompleteInput
-                value={manualInterviewer}
-                onChange={setManualInterviewer}
-                options={interviewerOptions}
-                placeholder="Start typing interviewer name (optional)"
-              />
-            </Field>
+              <Field label="Interviewer Name">
+                <AutocompleteInput
+                  value={manualInterviewer}
+                  onChange={setManualInterviewer}
+                  options={interviewerOptions}
+                  placeholder="One or more names (comma-separated, optional)"
+                />
+              </Field>
             <Btn
               variant="primary"
               className="w-full justify-center"
@@ -1016,107 +1124,119 @@ function InterviewsContent() {
           <p className="text-white/30 text-xs font-body">Planning window: up to 3 years ahead.</p>
 
           <div className="bg-[#1C1F26] border border-white/8 rounded-xl overflow-hidden">
-            <div className="grid border-b border-white/8" style={{ gridTemplateColumns: "64px repeat(7, 1fr)" }}>
-              <div className="p-2 text-[10px] text-white/20 font-body text-center">hour</div>
-              {weekDates.map((day, i) => {
-                const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-                const isToday = toDateString(day) === toDateString(new Date());
-                const isPastDay = day < new Date(new Date().setHours(0, 0, 0, 0));
-                const visibleCount = getDayVisibleCount(day);
-                return (
-                  <button
-                    key={i}
-                    onClick={() => !isPastDay && toggleDay(day)}
-                    disabled={isPastDay}
-                    title={isPastDay ? undefined : canDeleteInterviews ? "Toggle entire day" : "Add missing hours for this day"}
-                    className={`py-2 text-center text-xs font-medium font-body border-l border-white/6 transition-colors ${
-                      isPastDay ? "opacity-30 cursor-default" : "hover:bg-white/5 cursor-pointer"
-                    } ${isToday ? "text-[#85CC17]" : "text-white/45"}`}
-                  >
-                    <div>{dayNames[day.getDay()]}</div>
-                    <div className={`text-[10px] mt-0.5 ${isToday ? "text-[#85CC17]/80" : "text-white/25"}`}>
-                      {day.getMonth() + 1}/{day.getDate()}
-                    </div>
-                    <div className="text-[10px] mt-1 text-white/30">{visibleCount} visible</div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {GRID_HOURS.map((hour) => (
-              <div key={hour} className="grid border-b border-white/4" style={{ gridTemplateColumns: "64px repeat(7, 1fr)" }}>
-                <button
-                  onClick={() => toggleHourRow(hour)}
-                  title={canDeleteInterviews ? "Toggle this hour across all days" : "Add this hour across all days"}
-                  className="flex items-center justify-center py-3 text-[11px] text-white/35 hover:text-white/70 font-body transition-colors cursor-pointer hover:bg-white/5"
+            <div className="overflow-x-auto">
+              <div className="min-w-[1180px]">
+                <div
+                  className="grid border-b border-white/8"
+                  style={{ gridTemplateColumns: `140px repeat(${GRID_HOURS.length}, minmax(56px, 1fr))` }}
                 >
-                  {fmtHour(hour)}
-                </button>
+                  <div className="p-2 text-[10px] text-white/25 font-body uppercase tracking-wide text-center">Day / Time</div>
+                  {GRID_HOURS.map((hour) => {
+                    const visibleCount = getHourVisibleCount(hour);
+                    return (
+                      <button
+                        key={hour}
+                        onClick={() => toggleHourRow(hour)}
+                        title={canDeleteInterviews ? "Toggle this hour across all days" : "Add this hour across all days"}
+                        className="py-2 text-center text-[11px] font-medium font-body border-l border-white/6 text-white/55 hover:text-white hover:bg-white/5 transition-colors"
+                      >
+                        <div>{fmtHour(hour)}</div>
+                        <div className="text-[10px] text-white/25 mt-0.5">{visibleCount} visible</div>
+                      </button>
+                    );
+                  })}
+                </div>
 
                 {weekDates.map((day, dayIdx) => {
+                  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+                  const isToday = toDateString(day) === toDateString(new Date());
+                  const isPastDay = day < new Date(new Date().setHours(0, 0, 0, 0));
+                  const visibleCount = getDayVisibleCount(day);
                   const d = toDateString(day);
-                  const h = String(hour).padStart(2, "0");
 
                   return (
-                    <div key={dayIdx} className="border-l border-white/6">
-                      <div className="grid grid-cols-2 grid-rows-2 h-12">
-                        {QUARTER_MINUTES.map((minute) => {
-                          const minuteLabel = String(minute).padStart(2, "0");
-                          const key = slotKey(d, hour, minute);
-                          const slot = slotMap[key];
-                          const isVisible = !!slot && slot.available && !slot.bookedBy;
-                          const isBooked = !!slot?.bookedBy;
-                          const isPastSlot = new Date(`${d}T${h}:${minuteLabel}:59`).getTime() < now;
-                          const cannotRemoveVisible = !canDeleteInterviews && isVisible;
-                          const disabled = isPastSlot || isBooked || cannotRemoveVisible;
-                          const rowIndex = rowIndexFromTime(hour, minute);
-                          const selectionKey = `${d}|${hour}|${minute}`;
-                          const isSelectedInDrag = !!dragSelection[selectionKey];
+                    <div
+                      key={d}
+                      className="grid border-b border-white/4"
+                      style={{ gridTemplateColumns: `140px repeat(${GRID_HOURS.length}, minmax(56px, 1fr))` }}
+                    >
+                      <button
+                        onClick={() => !isPastDay && toggleDay(day)}
+                        disabled={isPastDay}
+                        title={isPastDay ? undefined : canDeleteInterviews ? "Toggle entire day" : "Add missing hours for this day"}
+                        className={`px-3 py-2 text-left border-r border-white/6 transition-colors ${
+                          isPastDay ? "opacity-30 cursor-default" : "hover:bg-white/5 cursor-pointer"
+                        }`}
+                      >
+                        <div className={`text-xs font-semibold ${isToday ? "text-[#85CC17]" : "text-white/60"}`}>
+                          {dayNames[day.getDay()]} {day.getMonth() + 1}/{day.getDate()}
+                        </div>
+                        <div className="text-[10px] text-white/30 mt-0.5">{visibleCount} visible</div>
+                      </button>
 
-                          let cellClass = "bg-white/10 hover:bg-white/25";
-                          if (isVisible) cellClass = "bg-[#85CC17]/70 hover:bg-[#85CC17]/45";
-                          if (isBooked) cellClass = "bg-red-500/45";
+                      {GRID_HOURS.map((hour) => {
+                        const h = String(hour).padStart(2, "0");
+                        return (
+                          <div key={hour} className="border-l border-white/6">
+                            <div className="grid grid-rows-4 h-14">
+                              {QUARTER_MINUTES.map((minute) => {
+                                const minuteLabel = String(minute).padStart(2, "0");
+                                const key = slotKey(d, hour, minute);
+                                const slot = slotMap[key];
+                                const isVisible = !!slot && slot.available && !slot.bookedBy;
+                                const isBooked = !!slot?.bookedBy;
+                                const isPastSlot = new Date(`${d}T${h}:${minuteLabel}:59`).getTime() < now;
+                                const cannotRemoveVisible = !canDeleteInterviews && isVisible;
+                                const disabled = isPastSlot || isBooked || cannotRemoveVisible;
+                                const rowIndex = rowIndexFromTime(hour, minute);
+                                const selectionKey = `${d}|${hour}|${minute}`;
+                                const isSelectedInDrag = !!dragSelection[selectionKey];
 
-                          const title = (() => {
-                            const label = fmtTimeOption(hour, minute);
-                            if (isPastSlot) return `${label} - Past`;
-                            if (isBooked) return `${label} - Booked`;
-                            if (cannotRemoveVisible) return `${label} - Visible (interviewer cannot remove)`;
-                            if (isVisible) return `${label} - Visible on booking page`;
-                            return `${label} - Hidden on booking page`;
-                          })();
+                                let cellClass = "bg-white/10 hover:bg-white/25";
+                                if (isVisible) cellClass = "bg-[#85CC17]/70 hover:bg-[#85CC17]/45";
+                                if (isBooked) cellClass = "bg-red-500/45";
 
-                          return (
-                            <button
-                              key={minute}
-                              disabled={disabled}
-                              onPointerDown={(e) => {
-                                if (disabled) return;
-                                e.preventDefault();
-                                startDragSelection(day, dayIdx, hour, minute, isVisible, isPastSlot, isBooked);
-                              }}
-                              onPointerEnter={() => {
-                                if (disabled) return;
-                                extendDragSelection(dayIdx, rowIndex, isPastSlot);
-                              }}
-                              title={title}
-                              className={`w-full h-full border border-white/6 transition-colors ${
-                                disabled
-                                  ? `${cellClass} cursor-default ${isPastSlot ? "opacity-20" : "opacity-70"}`
-                                  : `${cellClass} cursor-pointer`
-                              } ${isSelectedInDrag ? "ring-2 ring-inset ring-[#85CC17]" : ""}`}
-                              style={{
-                                touchAction: "none",
-                              }}
-                            />
-                          );
-                        })}
-                      </div>
+                                const title = (() => {
+                                  const label = fmtTimeOption(hour, minute);
+                                  if (isPastSlot) return `${label} - Past`;
+                                  if (isBooked) return `${label} - Booked`;
+                                  if (cannotRemoveVisible) return `${label} - Visible (interviewer cannot remove)`;
+                                  if (isVisible) return `${label} - Visible on booking page`;
+                                  return `${label} - Hidden on booking page`;
+                                })();
+
+                                return (
+                                  <button
+                                    key={minute}
+                                    disabled={disabled}
+                                    onPointerDown={(e) => {
+                                      if (disabled) return;
+                                      e.preventDefault();
+                                      startDragSelection(day, dayIdx, hour, minute, isVisible, isPastSlot, isBooked);
+                                    }}
+                                    onPointerEnter={() => {
+                                      if (disabled) return;
+                                      extendDragSelection(dayIdx, rowIndex, isPastSlot);
+                                    }}
+                                    title={title}
+                                    className={`w-full h-full border border-white/6 transition-colors ${
+                                      disabled
+                                        ? `${cellClass} cursor-default ${isPastSlot ? "opacity-20" : "opacity-70"}`
+                                        : `${cellClass} cursor-pointer`
+                                    } ${isSelectedInDrag ? "ring-2 ring-inset ring-[#85CC17]" : ""}`}
+                                    style={{ touchAction: "none" }}
+                                  />
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })}
               </div>
-            ))}
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-4 text-xs text-white/40 font-body">
@@ -1159,7 +1279,7 @@ function InterviewsContent() {
                   value={batchInterviewer}
                   onChange={(value) => setBatchInterviewer(value)}
                   options={interviewerOptions}
-                  placeholder="Start typing interviewer name (optional)"
+                  placeholder="One or more names (comma-separated, optional)"
                 />
               </Field>
             </>
@@ -1203,6 +1323,61 @@ function InterviewsContent() {
               : dragMode === "remove"
                 ? (removeWeekly ? "Remove Weekly Availability" : "Remove Availability")
                 : (repeatWeekly ? "Add Weekly Availability" : "Add Availability")}
+          </Btn>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!rescheduleSourceSlot}
+        onClose={() => {
+          if (rescheduling) return;
+          setRescheduleSourceSlot(null);
+          setRescheduleTargetSlotId("");
+        }}
+        title="Move Interview"
+      >
+        <div className="space-y-3">
+          <p className="text-white/55 text-sm font-body">
+            {rescheduleSourceSlot
+              ? `Current: ${formatDateTime(rescheduleSourceSlot.datetime)}${rescheduleSourceSlot.bookerName ? ` · ${rescheduleSourceSlot.bookerName}` : ""}`
+              : ""}
+          </p>
+          <Field label="New Time">
+            <select
+              value={rescheduleTargetSlotId}
+              onChange={(e) => setRescheduleTargetSlotId(e.target.value)}
+              className="w-full bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#85CC17]/45"
+            >
+              {availableFutureSlots.length === 0 && (
+                <option value="">No available interview times</option>
+              )}
+              {availableFutureSlots.map((slot) => (
+                <option key={slot.id} value={slot.id}>
+                  {formatDateTime(slot.datetime)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {rescheduleMessage && <p className="text-xs text-white/55">{rescheduleMessage}</p>}
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <Btn
+            variant="ghost"
+            onClick={() => {
+              if (rescheduling) return;
+              setRescheduleSourceSlot(null);
+              setRescheduleTargetSlotId("");
+            }}
+            disabled={rescheduling}
+          >
+            Cancel
+          </Btn>
+          <Btn
+            variant="primary"
+            onClick={() => void applyReschedule()}
+            disabled={rescheduling || !rescheduleTargetSlotId}
+          >
+            {rescheduling ? "Moving..." : "Move Interview"}
           </Btn>
         </div>
       </Modal>

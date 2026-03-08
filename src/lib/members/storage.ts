@@ -208,6 +208,7 @@ export interface InterviewSlot {
   bookerName?: string;    // name entered by applicant at booking time
   bookerEmail?: string;   // email entered by applicant at booking time
   interviewerName?: string;
+  interviewerNames?: string[];
   location?: string;
   createdBy: string;      // uid
   createdAt: number;      // Unix ms timestamp
@@ -824,6 +825,7 @@ export async function deleteBookedInterview(slotId: string): Promise<void> {
     bookedBy: "",
     bookerName: "",
     bookerEmail: "",
+    reminderSentAt: "",
   });
   await writeAuditLog(db, {
     action: "delete",

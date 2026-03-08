@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDB } from "@/lib/firebaseAdmin";
 import { resolveInterviewZoomSettings } from "@/lib/interviews/config";
-import { sendInterviewBookingEmail } from "@/lib/server/interviewEmail";
+import { sendInterviewBookingEmail, sendInterviewRescheduledEmail } from "@/lib/server/interviewEmail";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -66,6 +66,42 @@ async function writeAuditLog(entry: {
   await dbPush("auditLogs", {
     timestamp: new Date().toISOString(),
     ...entry,
+  });
+}
+
+type ExistingBooking = {
+  id: string;
+  datetime: string;
+};
+
+async function findExistingBookingsByEmail(email: string, excludeSlotId: string): Promise<ExistingBooking[]> {
+  if (!email) return [];
+  const slotsData = await dbGet("interviewSlots");
+  if (!slotsData) return [];
+  const now = Date.now();
+  const target = email.trim().toLowerCase();
+  return Object.entries(slotsData as Record<string, Record<string, unknown>>)
+    .map(([id, slot]) => ({ id, slot }))
+    .filter(({ id, slot }) => {
+      if (id === excludeSlotId) return false;
+      const slotEmail = String(slot.bookerEmail ?? "").trim().toLowerCase();
+      const startsAt = new Date(String(slot.datetime ?? "")).getTime();
+      return !!slot.bookedBy && !slot.available && slotEmail === target && startsAt > now;
+    })
+    .map(({ id, slot }) => ({
+      id,
+      datetime: String(slot.datetime ?? ""),
+    }))
+    .sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime());
+}
+
+async function clearExistingBooking(slotId: string): Promise<void> {
+  await dbPatch(`interviewSlots/${slotId}`, {
+    available: true,
+    bookedBy: "",
+    bookerName: "",
+    bookerEmail: "",
+    reminderSentAt: "",
   });
 }
 
@@ -144,6 +180,7 @@ export async function POST(req: NextRequest) {
       bookedBy: "public-booking",
       bookerName: cleanName,
       bookerEmail: cleanEmail,
+      reminderSentAt: "",
     });
     await writeAuditLog({
       action: "update",
@@ -158,6 +195,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "server_error" }, { status: 500 });
   }
 
+  let replacedBookings: ExistingBooking[] = [];
+  try {
+    replacedBookings = await findExistingBookingsByEmail(cleanEmail, cleanSlotId);
+    for (const existing of replacedBookings) {
+      await clearExistingBooking(existing.id);
+      await writeAuditLog({
+        action: "update",
+        collection: "interviewSlots",
+        recordId: existing.id,
+        actorUid: "public:booking",
+        actorEmail: cleanEmail.toLowerCase(),
+        actorName: cleanName,
+        details: { rescheduledTo: cleanSlotId, available: true, bookedBy: "" },
+      }).catch(() => {});
+    }
+  } catch {
+    // Do not fail the booking if cleanup fails.
+  }
+
   const durationMinutes = Number(slot.durationMinutes ?? 30);
   const datetimeIso = typeof slot.datetime === "string" ? slot.datetime : "";
   const location = typeof slot.location === "string" ? slot.location : "";
@@ -169,7 +225,7 @@ export async function POST(req: NextRequest) {
       settingsData = null;
     }
     const zoom = resolveInterviewZoomSettings(settingsData, process.env.INTERVIEW_ZOOM_LINK ?? "");
-    await sendInterviewBookingEmail({
+    const payload = {
       to: cleanEmail,
       bookerName: cleanName,
       slotId: cleanSlotId,
@@ -177,8 +233,16 @@ export async function POST(req: NextRequest) {
       durationMinutes: Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : 30,
       zoomLink: zoom.zoomLink,
       location,
-    }).catch(() => {});
+    };
+    if (replacedBookings.length > 0 && replacedBookings[0]?.datetime) {
+      await sendInterviewRescheduledEmail({
+        ...payload,
+        previousDatetimeIso: replacedBookings[0].datetime,
+      }).catch(() => {});
+    } else {
+      await sendInterviewBookingEmail(payload).catch(() => {});
+    }
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, rescheduled: replacedBookings.length > 0 });
 }
