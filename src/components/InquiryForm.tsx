@@ -28,19 +28,23 @@ export default function InquiryForm() {
     setStatus("loading");
 
     // Send via server-side proxy to avoid CORS issues with Apps Script.
-    fetch("/api/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        formType: "inquiry",
-        name:     form.name,
-        email:    form.email,
-        inquiry:  form.inquiry,
-      }),
-    }).catch(() => {});
-
-    setStatus("success");
-    setForm(EMPTY);
+    try {
+      const res = await fetch("/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          formType: "inquiry",
+          name:     form.name,
+          email:    form.email,
+          inquiry:  form.inquiry,
+        }),
+      });
+      if (!res.ok) throw new Error("submit_failed");
+      setStatus("success");
+      setForm(EMPTY);
+    } catch {
+      setStatus("error");
+    }
   };
 
   if (status === "success") {

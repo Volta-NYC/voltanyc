@@ -1075,7 +1075,7 @@ function InterviewsContent() {
 
                           let cellClass = "bg-white/10 hover:bg-white/25";
                           if (isVisible) cellClass = "bg-[#85CC17]/70 hover:bg-[#85CC17]/45";
-                          if (isBooked) cellClass = "bg-white/5";
+                          if (isBooked) cellClass = "bg-red-500/45";
 
                           const title = (() => {
                             const label = fmtTimeOption(hour, minute);

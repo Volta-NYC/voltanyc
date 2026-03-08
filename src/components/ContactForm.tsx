@@ -80,23 +80,27 @@ export default function ContactForm() {
     }).join(", ");
 
     // Send via server-side proxy to avoid CORS issues with Apps Script.
-    fetch("/api/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        formType:     "contact",
-        businessName: formData.businessName,
-        name:         formData.name,
-        email:        formData.email,
-        neighborhood: formData.neighborhood,
-        services:     englishServices,
-        message:      formData.message,
-        language:     LANG_LABELS[lang],
-      }),
-    }).catch(() => {});
-
-    setStatus("success");
-    setFormData(EMPTY);
+    try {
+      const res = await fetch("/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          formType:     "contact",
+          businessName: formData.businessName,
+          name:         formData.name,
+          email:        formData.email,
+          neighborhood: formData.neighborhood,
+          services:     englishServices,
+          message:      formData.message,
+          language:     LANG_LABELS[lang],
+        }),
+      });
+      if (!res.ok) throw new Error("submit_failed");
+      setStatus("success");
+      setFormData(EMPTY);
+    } catch {
+      setStatus("error");
+    }
   };
 
   if (status === "success") {

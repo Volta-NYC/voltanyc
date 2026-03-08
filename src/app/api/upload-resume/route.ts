@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { consumeRateLimit, getClientIp } from "@/lib/server/rateLimit";
 
 // Receives a resume file upload, converts to base64, and forwards to
 // Google Apps Script which saves it to Drive and returns a shareable link.
@@ -10,6 +11,22 @@ export async function POST(req: Request) {
   const url = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL;
   if (!url) {
     return NextResponse.json({ error: "Not configured" }, { status: 500 });
+  }
+
+  const ip = getClientIp(req.headers);
+  const limit = Number(process.env.RESUME_UPLOAD_RATE_LIMIT_PER_IP ?? 5);
+  const windowSec = Number(process.env.RESUME_UPLOAD_RATE_LIMIT_WINDOW_SEC ?? 3600);
+  const rate = await consumeRateLimit({
+    bucket: "resume-upload-ip",
+    key: ip,
+    limit,
+    windowSec,
+  });
+  if (!rate.ok) {
+    return NextResponse.json(
+      { error: "too_many_requests", retryAfterSec: rate.retryAfterSec },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
+    );
   }
 
   const formData = await req.formData();

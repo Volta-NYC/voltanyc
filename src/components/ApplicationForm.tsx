@@ -73,13 +73,17 @@ export default function ApplicationForm() {
       payload["Accomplishment"] = form.accomplishment;
     }
 
-    fetch("/api/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }).catch(() => {});
-
-    setStatus("success");
+    try {
+      const res = await fetch("/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("submit_failed");
+      setStatus("success");
+    } catch {
+      setStatus("error");
+    }
   };
 
   if (status === "success") {

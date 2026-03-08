@@ -60,6 +60,28 @@ export default function SignupPage() {
     setLoading(true);
     const normalizedCode = code.trim().toUpperCase();
 
+    // ── Abuse guard (IP/email/code) ───────────────────────────────────────────
+    try {
+      const guard = await fetch("/api/members/signup-guard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          code: normalizedCode,
+        }),
+      });
+      if (!guard.ok) {
+        if (guard.status === 429) setError("Too many signup attempts. Please try again later.");
+        else setError("Could not verify signup request. Please try again.");
+        setLoading(false);
+        return;
+      }
+    } catch {
+      setError("Could not verify signup request. Please try again.");
+      setLoading(false);
+      return;
+    }
+
     // ── Step 1: Validate invite code ──────────────────────────────────────────
     // Reads the specific code directly (inviteCodes/{code}) so the signup page
     // can verify without needing auth to list the entire inviteCodes collection.
@@ -77,9 +99,11 @@ export default function SignupPage() {
 
     // ── Step 2: Create Firebase Auth account ──────────────────────────────────
     let uid: string;
+    let idToken = "";
     try {
       const cred = await signUp(email.trim().toLowerCase(), password);
       uid = cred.user.uid;
+      idToken = await cred.user.getIdToken();
     } catch (err: unknown) {
       const errCode = (err as { code?: string })?.code;
       if (errCode === "auth/email-already-in-use")  setError("An account with this email already exists. Sign in instead.");
@@ -103,6 +127,25 @@ export default function SignupPage() {
         grade:     grade.trim(),
         active:    true,
         createdAt: new Date().toISOString(),
+      });
+    } catch { /* non-fatal */ }
+
+    // ── Step 3b: Sync into team directory (name/email/school/grade) ─────────
+    // Uses a server route with Admin SDK so regular members don't need write
+    // access to the team collection in database rules.
+    try {
+      await fetch("/api/members/sync-profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          school: school.trim(),
+          grade: grade.trim(),
+        }),
       });
     } catch { /* non-fatal */ }
 

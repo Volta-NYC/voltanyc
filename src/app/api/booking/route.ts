@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDB } from "@/lib/firebaseAdmin";
 import { resolveInterviewZoomSettings } from "@/lib/interviews/config";
+import { sendInterviewBookingEmail } from "@/lib/server/interviewEmail";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const runtime = "nodejs";
 
 const DB_URL = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL ?? "";
 
@@ -154,6 +156,28 @@ export async function POST(req: NextRequest) {
     }).catch(() => {});
   } catch {
     return NextResponse.json({ error: "server_error" }, { status: 500 });
+  }
+
+  const durationMinutes = Number(slot.durationMinutes ?? 30);
+  const datetimeIso = typeof slot.datetime === "string" ? slot.datetime : "";
+  const location = typeof slot.location === "string" ? slot.location : "";
+  if (datetimeIso) {
+    let settingsData: unknown = null;
+    try {
+      settingsData = await dbGet("interviewSettings");
+    } catch {
+      settingsData = null;
+    }
+    const zoom = resolveInterviewZoomSettings(settingsData, process.env.INTERVIEW_ZOOM_LINK ?? "");
+    await sendInterviewBookingEmail({
+      to: cleanEmail,
+      bookerName: cleanName,
+      slotId: cleanSlotId,
+      datetimeIso,
+      durationMinutes: Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : 30,
+      zoomLink: zoom.zoomLink,
+      location,
+    }).catch(() => {});
   }
 
   return NextResponse.json({ success: true });

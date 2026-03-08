@@ -6,7 +6,7 @@ import {
   PageHeader, SearchBar, Btn, Modal, Field, Input, Table, Empty, useConfirm,
 } from "@/components/members/ui";
 import {
-  subscribeTeam, createTeamMember, updateTeamMember, deleteTeamMember, type TeamMember,
+  subscribeTeam, subscribeUserProfiles, createTeamMember, updateTeamMember, deleteTeamMember, type TeamMember, type UserProfile,
 } from "@/lib/members/storage";
 import { useAuth } from "@/lib/members/authContext";
 
@@ -87,6 +87,7 @@ function findHeaderIndex(headers: string[], aliases: string[]): number {
 
 export default function TeamPage() {
   const [team, setTeam]               = useState<TeamMember[]>([]);
+  const [profiles, setProfiles]       = useState<UserProfile[]>([]);
   const [search, setSearch]           = useState("");
   const [modal, setModal]             = useState<"create" | "edit" | null>(null);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
@@ -103,6 +104,7 @@ export default function TeamPage() {
 
   // Subscribe to real-time team updates; unsubscribe on unmount.
   useEffect(() => subscribeTeam(setTeam), []);
+  useEffect(() => subscribeUserProfiles(setProfiles), []);
 
   // Generic field updater used by all form inputs.
   const setField = (key: string, value: unknown) =>
@@ -353,6 +355,13 @@ export default function TeamPage() {
     return sortDir === "asc" ? cmp : -cmp;
   });
 
+  const normalizeEmailKey = (value: string) => normalizeKey(value);
+  const accountEmailKeys = new Set(
+    profiles
+      .map((p) => normalizeEmailKey(p.email ?? ""))
+      .filter(Boolean)
+  );
+
   return (
     <MembersLayout>
       <Dialog />
@@ -389,9 +398,12 @@ export default function TeamPage() {
 
       {/* Team member list */}
       <Table
-        cols={["Name", "Email", "School", "Grade", "Actions"]}
+        cols={["Name", "Email", "School", "Grade", "Account", "Actions"]}
         sortCol={sortCol} sortDir={sortDir} onSort={handleSort} sortableCols={[0,1,2,3]}
         rows={sorted.map(member => {
+          const hasAccount =
+            accountEmailKeys.has(normalizeEmailKey(member.email ?? ""))
+            || accountEmailKeys.has(normalizeEmailKey(member.alternateEmail ?? ""));
           return [
             <div key="name" className="flex items-center gap-2.5">
               {/* Avatar with first initial */}
@@ -403,11 +415,25 @@ export default function TeamPage() {
             <div key="email" className="text-xs font-mono">
               <p className="text-white/50">{member.email || "—"}</p>
               {member.alternateEmail && (
-                <p className="text-white/30">Alt: {member.alternateEmail}</p>
+                <p className="text-white/30">{member.alternateEmail}</p>
               )}
             </div>,
             <span key="school" className="text-white/50">{member.school || "—"}</span>,
             <span key="grade" className="text-white/50">{member.grade || "—"}</span>,
+            <div key="account" className="flex items-center gap-2">
+              <span
+                className={`inline-flex w-4 h-4 items-center justify-center rounded-sm border text-[11px] font-bold ${
+                  hasAccount
+                    ? "border-[#85CC17]/70 text-[#85CC17] bg-[#85CC17]/15"
+                    : "border-red-400/60 text-red-400 bg-red-500/10"
+                }`}
+              >
+                {hasAccount ? "✓" : "✕"}
+              </span>
+              <span className={`text-xs ${hasAccount ? "text-[#85CC17]/85" : "text-red-400/85"}`}>
+                {hasAccount ? "Has account" : "No account"}
+              </span>
+            </div>,
             <div key="actions" className="flex gap-2">
               {canEdit && <Btn size="sm" variant="secondary" onClick={() => openEdit(member)}>Edit</Btn>}
               {canEdit && <Btn size="sm" variant="danger" onClick={() => ask(async () => deleteTeamMember(member.id))}>Delete</Btn>}

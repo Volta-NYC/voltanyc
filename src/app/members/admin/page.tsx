@@ -169,10 +169,10 @@ function UsersTab() {
     <>
       <Dialog />
       <Table
-        cols={["Email", "Name", "Role", "Active", "Joined", "Actions"]}
+        cols={["Name", "Email", "Role", "Active", "Joined", "Actions"]}
         rows={sortedUsers.map(user => [
-          <span key="email" className="text-white text-sm font-mono">{user.email}</span>,
           <span key="name" className="text-white/70 text-sm">{user.name ?? "—"}</span>,
+          <span key="email" className="text-white text-sm font-mono">{user.email}</span>,
           <select
             key="role"
             value={user.authRole}
@@ -213,6 +213,7 @@ function DataTab() {
   const { user } = useAuth();
 
   const normalizeKey = (v?: string) => (v ?? "").trim().toLowerCase();
+  const looksLikeEmail = (v?: string) => /\S+@\S+\.\S+/.test((v ?? "").trim());
 
   const handleExport = async () => {
     if (!user) {
@@ -285,19 +286,33 @@ function DataTab() {
       const today = new Date().toISOString().split("T")[0];
 
       for (const profile of profiles) {
-        const email = (profile.email ?? "").trim().toLowerCase();
-        const name = (profile.name ?? "").trim();
+        const profileEmail = (profile.email ?? "").trim().toLowerCase();
+        const rawName = (profile.name ?? "").trim();
+        const nameLooksEmail = looksLikeEmail(rawName);
+        const nameEmail = nameLooksEmail ? rawName.toLowerCase() : "";
+        const emailCandidates = Array.from(new Set([profileEmail, nameEmail].filter(Boolean)));
+        const preferredEmail = profileEmail || nameEmail;
+        const name = nameLooksEmail ? "" : rawName;
         const school = (profile.school ?? "").trim();
         const grade = (profile.grade ?? "").trim();
 
-        const emailKey = normalizeKey(email);
+        const emailKey = normalizeKey(preferredEmail);
         const nameKey = normalizeKey(name);
         if (!emailKey && !nameKey) {
           skipped += 1;
           continue;
         }
 
-        let target: TeamMember | undefined = emailKey ? existingByEmail.get(emailKey) : undefined;
+        let target: TeamMember | undefined;
+        for (const candidate of emailCandidates) {
+          const key = normalizeKey(candidate);
+          if (!key) continue;
+          const hit = existingByEmail.get(key);
+          if (hit) {
+            target = hit;
+            break;
+          }
+        }
 
         if (!target && nameKey) {
           const sameName = existingByName.get(nameKey) ?? [];
@@ -319,8 +334,8 @@ function DataTab() {
             const primaryEmailKey = normalizeKey(target.email);
             const altEmailKey = normalizeKey(target.alternateEmail);
             if (emailKey !== primaryEmailKey && emailKey !== altEmailKey) {
-              if (!target.email) patch.email = email;
-              else if (!target.alternateEmail) patch.alternateEmail = email;
+              if (!target.email) patch.email = preferredEmail;
+              else if (!target.alternateEmail) patch.alternateEmail = preferredEmail;
             }
           }
 
@@ -349,8 +364,8 @@ function DataTab() {
         }
 
         const newMember: Omit<TeamMember, "id" | "createdAt"> = {
-          name: name || (email ? email.split("@")[0] : "New Member"),
-          email,
+          name: name || (preferredEmail ? preferredEmail.split("@")[0] : "New Member"),
+          email: preferredEmail,
           alternateEmail: "",
           school,
           grade,

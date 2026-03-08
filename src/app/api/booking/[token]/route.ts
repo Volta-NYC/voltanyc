@@ -13,8 +13,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDB } from "@/lib/firebaseAdmin";
 import { resolveInterviewZoomSettings } from "@/lib/interviews/config";
+import { sendInterviewBookingEmail } from "@/lib/server/interviewEmail";
 
 type Params = { params: { token: string } };
+export const runtime = "nodejs";
 
 // ── DB helpers — Admin SDK preferred, REST API fallback ───────────────────────
 
@@ -181,6 +183,20 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   const invite = inviteData as { multiUse?: boolean };
+  let slotData: unknown;
+  try {
+    slotData = await dbGet(`interviewSlots/${slotId}`);
+  } catch {
+    return NextResponse.json({ error: "server_error" }, { status: 500 });
+  }
+  if (!slotData) {
+    return NextResponse.json({ error: "slot_not_found" }, { status: 404 });
+  }
+  const slot = slotData as Record<string, unknown>;
+  const startsAt = new Date((slot.datetime as string) ?? "").getTime();
+  if (!slot.available || slot.bookedBy || Number.isNaN(startsAt) || startsAt <= Date.now()) {
+    return NextResponse.json({ error: "slot_unavailable" }, { status: 409 });
+  }
 
   try {
     await dbPatch(`interviewSlots/${slotId}`, {
@@ -216,6 +232,30 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
   } catch {
     return NextResponse.json({ error: "server_error" }, { status: 500 });
+  }
+
+  const cleanName = (bookerName || "").trim();
+  const cleanEmail = (bookerEmail || "").trim();
+  const durationMinutes = Number(slot.durationMinutes ?? 30);
+  const datetimeIso = typeof slot.datetime === "string" ? slot.datetime : "";
+  const location = typeof slot.location === "string" ? slot.location : "";
+  if (cleanEmail && datetimeIso) {
+    let settingsData: unknown = null;
+    try {
+      settingsData = await dbGet("interviewSettings");
+    } catch {
+      settingsData = null;
+    }
+    const zoom = resolveInterviewZoomSettings(settingsData, process.env.INTERVIEW_ZOOM_LINK ?? "");
+    await sendInterviewBookingEmail({
+      to: cleanEmail,
+      bookerName: cleanName,
+      slotId,
+      datetimeIso,
+      durationMinutes: Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : 30,
+      zoomLink: zoom.zoomLink,
+      location,
+    }).catch(() => {});
   }
 
   return NextResponse.json({ success: true });
