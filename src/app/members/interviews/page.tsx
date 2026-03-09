@@ -220,6 +220,8 @@ function InterviewsContent() {
   const [rescheduleTargetSlotId, setRescheduleTargetSlotId] = useState("");
   const [rescheduleMessage, setRescheduleMessage] = useState<string | null>(null);
   const [rescheduling, setRescheduling] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [resendingSlotId, setResendingSlotId] = useState("");
 
   const [slotWeek, setSlotWeek] = useState(0);
   const [windowAnchor, setWindowAnchor] = useState(() => new Date());
@@ -506,6 +508,41 @@ function InterviewsContent() {
     } finally {
       setRescheduling(false);
       setTimeout(() => setRescheduleMessage(null), 2200);
+    }
+  };
+
+  const resendConfirmationEmail = async (slot: InterviewSlot) => {
+    if (!canDeleteInterviews) return;
+    setResendingSlotId(slot.id);
+    setResendMessage(null);
+    try {
+      const token = await user?.getIdToken();
+      if (!token) {
+        setResendMessage("Could not resend: not authenticated.");
+        return;
+      }
+      const res = await fetch("/api/booking/resend", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ slotId: slot.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({} as { error?: string }));
+        const code = data.error ?? "send_failed";
+        if (code === "slot_not_booked") setResendMessage("Cannot resend: slot is no longer booked.");
+        else if (code === "slot_not_found") setResendMessage("Cannot resend: slot not found.");
+        else setResendMessage("Could not resend confirmation email.");
+        return;
+      }
+      setResendMessage("Confirmation email sent.");
+    } catch {
+      setResendMessage("Could not resend confirmation email.");
+    } finally {
+      setResendingSlotId("");
+      setTimeout(() => setResendMessage(null), 2200);
     }
   };
 
@@ -1000,6 +1037,9 @@ function InterviewsContent() {
               No upcoming interviews booked yet.
             </div>
           )}
+          {resendMessage && (
+            <p className="text-xs text-white/55 font-body">{resendMessage}</p>
+          )}
           {upcomingBookedByDate.map(([day, daySlots]) => (
             <div key={day}>
               <h3 className="text-white/60 text-sm font-semibold font-body mb-2">{formatDateHeading(day)}</h3>
@@ -1023,6 +1063,14 @@ function InterviewsContent() {
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {canDeleteInterviews ? (
                           <>
+                            <Btn
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => resendConfirmationEmail(slot)}
+                              disabled={resendingSlotId === slot.id}
+                            >
+                              {resendingSlotId === slot.id ? "Sending..." : "Resend Email"}
+                            </Btn>
                             <Btn size="sm" variant="secondary" onClick={() => startReschedule(slot)}>
                               Move
                             </Btn>

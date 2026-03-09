@@ -19,6 +19,8 @@ const BLANK_FORM: Omit<TeamMember, "id" | "createdAt"> = {
   email: "", alternateEmail: "", status: "Active", skills: [], joinDate: "", notes: "",
 };
 
+const GRADE_OPTIONS = ["Freshman", "Sophomore", "Junior", "Senior", "College"];
+
 type TrackKey = "Tech" | "Marketing" | "Finance" | "Outreach" | "—";
 
 function getMemberTrack(member: TeamMember): TrackKey {
@@ -535,7 +537,16 @@ export default function TeamPage() {
             <Input value={form.school} onChange={e => setField("school", e.target.value)} />
           </Field>
           <Field label="Grade">
-            <Input value={form.grade ?? ""} onChange={e => setField("grade", e.target.value)} />
+            <select
+              value={form.grade ?? ""}
+              onChange={e => setField("grade", e.target.value)}
+              className="w-full bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#85CC17]/45"
+            >
+              <option value="">Select grade</option>
+              {GRADE_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
           </Field>
           <Field label="Track">
             <select

@@ -233,19 +233,17 @@ export default function SignupPage() {
             <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">
               Grade
             </label>
-            <input
+            <select
               required
-              list="signup-grade-options"
               value={grade}
               onChange={(e) => setGrade(e.target.value)}
-              className="w-full bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-[#85CC17]/50 transition-colors"
-              placeholder="Start typing grade"
-            />
-            <datalist id="signup-grade-options">
+              className="w-full bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#85CC17]/50 transition-colors"
+            >
+              <option value="">Select grade</option>
               {GRADE_OPTIONS.map((option) => (
-                <option key={option} value={option} />
+                <option key={option} value={option}>{option}</option>
               ))}
-            </datalist>
+            </select>
           </div>
 
           <div>
