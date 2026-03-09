@@ -1224,6 +1224,52 @@ function InterviewsContent() {
 
     setApplyingBatch(true);
     try {
+      if (dragMode === "remove" && shouldRepeatWeekly) {
+        const idsToDelete = new Set<string>();
+        const nowTs = Date.now();
+        const selectedCells = Object.values(dragSelection);
+
+        selectedCells.forEach((cell) => {
+          const selected = slotMap[slotKey(cell.dateISO, cell.hour, cell.minute)];
+          // If this slot belongs to a weekly series, delete all future available slots in that series.
+          if (selected?.recurringWeekly && selected.recurringSeriesId) {
+            slots.forEach((candidate) => {
+              const ts = new Date(candidate.datetime).getTime();
+              if (ts < nowTs) return;
+              if (candidate.recurringSeriesId !== selected.recurringSeriesId) return;
+              if (!candidate.available || !!candidate.bookedBy) return;
+              idsToDelete.add(candidate.id);
+            });
+            return;
+          }
+
+          // Fallback: remove same weekday/time through planning window.
+          for (let week = 0; week < 60; week += 1) {
+            const date = new Date(`${cell.dateISO}T00:00:00`);
+            date.setDate(date.getDate() + week * 7);
+            if (date.getTime() > planningEndTs) break;
+            const dateISO = toDateString(date);
+            const candidate = slotMap[slotKey(dateISO, cell.hour, cell.minute)];
+            if (!candidate) continue;
+            if (!candidate.available || !!candidate.bookedBy) continue;
+            if (new Date(candidate.datetime).getTime() < nowTs) continue;
+            idsToDelete.add(candidate.id);
+          }
+        });
+
+        for (const id of Array.from(idsToDelete)) {
+          // eslint-disable-next-line no-await-in-loop
+          await deleteInterviewSlot(id);
+        }
+        setAvailableMessage(
+          idsToDelete.size > 0
+            ? `Removed ${idsToDelete.size} recurring availability slot(s).`
+            : "No recurring availability slots to remove."
+        );
+        setTimeout(() => setAvailableMessage(null), 2400);
+        return;
+      }
+
       for (const cell of Object.values(uniqueTargets)) {
         const slotTs = new Date(
           `${cell.dateISO}T${String(cell.hour).padStart(2, "0")}:${String(cell.minute).padStart(2, "0")}:00`
