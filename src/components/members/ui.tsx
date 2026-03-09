@@ -389,7 +389,7 @@ export function useConfirm() {
 
   const Dialog = () =>
     pendingAction ? (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
         <div className="fixed inset-0 bg-black/70" onClick={cancel} />
         <div className="relative bg-[#1C1F26] border border-white/10 rounded-xl p-6 max-w-sm w-full">
           <p className="text-white font-semibold mb-2">Are you sure?</p>
