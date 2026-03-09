@@ -13,7 +13,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDB } from "@/lib/firebaseAdmin";
 import { resolveInterviewZoomSettings } from "@/lib/interviews/config";
-import { sendInterviewBookingEmail, sendInterviewRescheduledEmail } from "@/lib/server/interviewEmail";
+import { pickIcsOrganizer, resolveInterviewerContacts } from "@/lib/server/interviewerResolver";
+import {
+  sendInterviewerBookingNotificationEmail,
+  sendInterviewerRescheduledNotificationEmail,
+  sendInterviewBookingEmail,
+  sendInterviewRescheduledEmail,
+} from "@/lib/server/interviewEmail";
 
 type Params = { params: { token: string } };
 export const runtime = "nodejs";
@@ -297,12 +303,19 @@ export async function POST(req: NextRequest, { params }: Params) {
   const location = typeof slot.location === "string" ? slot.location : "";
   if (cleanEmail && datetimeIso) {
     let settingsData: unknown = null;
+    let teamData: unknown = null;
     try {
-      settingsData = await dbGet("interviewSettings");
+      [settingsData, teamData] = await Promise.all([
+        dbGet("interviewSettings"),
+        dbGet("team"),
+      ]);
     } catch {
       settingsData = null;
+      teamData = null;
     }
     const zoom = resolveInterviewZoomSettings(settingsData, process.env.INTERVIEW_ZOOM_LINK ?? "");
+    const interviewerContacts = resolveInterviewerContacts(slot, teamData);
+    const organizer = pickIcsOrganizer(interviewerContacts, process.env.INTERVIEW_EMAIL_FROM ?? "");
     const payload = {
       to: cleanEmail,
       bookerName: cleanName,
@@ -311,14 +324,51 @@ export async function POST(req: NextRequest, { params }: Params) {
       durationMinutes: Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : 30,
       zoomLink: zoom.zoomLink,
       location,
+      organizerName: organizer.name,
+      organizerEmail: organizer.email,
     };
     if (replacedBookings.length > 0 && replacedBookings[0]?.datetime) {
       await sendInterviewRescheduledEmail({
         ...payload,
         previousDatetimeIso: replacedBookings[0].datetime,
       }).catch(() => {});
+      const sent = new Set<string>();
+      for (const contact of interviewerContacts) {
+        const email = contact.email.trim().toLowerCase();
+        if (!email || sent.has(email)) continue;
+        sent.add(email);
+        await sendInterviewerRescheduledNotificationEmail({
+          to: contact.email,
+          interviewerName: contact.name,
+          bookerName: cleanName,
+          bookerEmail: cleanEmail,
+          previousDatetimeIso: replacedBookings[0].datetime,
+          datetimeIso,
+          durationMinutes: Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : 30,
+          zoomLink: zoom.zoomLink,
+          location,
+          slotId,
+        }).catch(() => {});
+      }
     } else {
       await sendInterviewBookingEmail(payload).catch(() => {});
+      const sent = new Set<string>();
+      for (const contact of interviewerContacts) {
+        const email = contact.email.trim().toLowerCase();
+        if (!email || sent.has(email)) continue;
+        sent.add(email);
+        await sendInterviewerBookingNotificationEmail({
+          to: contact.email,
+          interviewerName: contact.name,
+          bookerName: cleanName,
+          bookerEmail: cleanEmail,
+          datetimeIso,
+          durationMinutes: Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : 30,
+          zoomLink: zoom.zoomLink,
+          location,
+          slotId,
+        }).catch(() => {});
+      }
     }
   }
 

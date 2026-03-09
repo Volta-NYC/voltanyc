@@ -18,6 +18,8 @@ import {
 import { Btn, Field, Modal, AutocompleteInput, useConfirm } from "@/components/members/ui";
 import { DEFAULT_INTERVIEW_ZOOM_LINK } from "@/lib/interviews/config";
 
+const ET_TIMEZONE = "America/New_York";
+
 function formatDateTime(isoString: string): string {
   const d = new Date(isoString);
   return d.toLocaleString("en-US", {
@@ -26,6 +28,8 @@ function formatDateTime(isoString: string): string {
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: ET_TIMEZONE,
+    timeZoneName: "short",
   });
 }
 
@@ -226,6 +230,7 @@ function InterviewsContent() {
   const [repeatWeekly, setRepeatWeekly] = useState(false);
   const [removeWeekly, setRemoveWeekly] = useState(false);
   const [batchInterviewer, setBatchInterviewer] = useState("");
+  const [bookedSlotDetails, setBookedSlotDetails] = useState<InterviewSlot | null>(null);
   const [applyingBatch, setApplyingBatch] = useState(false);
   const [manualStartDateInput, setManualStartDateInput] = useState(toDateString(new Date()));
   const [manualEndDateInput, setManualEndDateInput] = useState(toDateString(new Date()));
@@ -437,6 +442,16 @@ function InterviewsContent() {
       sortedSlots.filter((s) => s.available && !s.bookedBy && new Date(s.datetime).getTime() > now),
     [sortedSlots, now]
   );
+
+  const singleSelectedCell = useMemo(() => {
+    const entries = Object.values(dragSelection);
+    return entries.length === 1 ? entries[0] : null;
+  }, [dragSelection]);
+
+  const singleSelectedSlot = useMemo(() => {
+    if (!singleSelectedCell) return null;
+    return slotMap[slotKey(singleSelectedCell.dateISO, singleSelectedCell.hour, singleSelectedCell.minute)] ?? null;
+  }, [singleSelectedCell, slotMap]);
 
   const cancelBookedInterview = (slot: InterviewSlot) => {
     if (!canDeleteInterviews) return;
@@ -676,7 +691,13 @@ function InterviewsContent() {
     isPastSlot: boolean,
     isBooked: boolean
   ) => {
-    if (isPastSlot || isBooked) return;
+    if (isPastSlot) return;
+    if (isBooked) {
+      const dateISO = toDateString(date);
+      const booked = slotMap[slotKey(dateISO, hour, minute)];
+      if (booked) setBookedSlotDetails(booked);
+      return;
+    }
     if (isVisible && !canDeleteInterviews) return;
     const mode: DragMode = isVisible && canDeleteInterviews ? "remove" : "add";
     const dateISO = toDateString(date);
@@ -873,6 +894,9 @@ function InterviewsContent() {
         <h1 className="font-display font-bold text-white text-2xl">Interviews</h1>
         <p className="text-white/40 text-sm mt-1 font-body">
           Manage one public booking link, availability, and upcoming interviews.
+        </p>
+        <p className="text-white/30 text-xs mt-1 font-body">
+          All times are shown in New York time (EST/EDT).
         </p>
       </div>
 
@@ -1187,7 +1211,7 @@ function InterviewsContent() {
                                 const isBooked = !!slot?.bookedBy;
                                 const isPastSlot = new Date(`${d}T${h}:${minuteLabel}:59`).getTime() < now;
                                 const cannotRemoveVisible = !canDeleteInterviews && isVisible;
-                                const disabled = isPastSlot || isBooked || cannotRemoveVisible;
+                                const disabled = isPastSlot || cannotRemoveVisible;
                                 const rowIndex = rowIndexFromTime(hour, minute);
                                 const selectionKey = `${d}|${hour}|${minute}`;
                                 const isSelectedInDrag = !!dragSelection[selectionKey];
@@ -1263,6 +1287,17 @@ function InterviewsContent() {
           <p className="text-white/55 text-sm font-body">
             {Object.keys(dragSelection).length} 15-minute slot(s) selected in this week.
           </p>
+          {dragMode === "remove" && singleSelectedSlot && (
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-1">
+              <p className="text-xs text-white/45 uppercase tracking-wide">Current Interviewer</p>
+              <p className="text-sm text-white/85 font-body">
+                {(() => {
+                  const names = getSlotInterviewerNames(singleSelectedSlot);
+                  return names.length > 0 ? names.join(", ") : "Not set";
+                })()}
+              </p>
+            </div>
+          )}
           {dragMode === "add" ? (
             <>
               <label className="inline-flex items-center gap-2 text-sm text-white/70 font-body select-none">
@@ -1325,6 +1360,41 @@ function InterviewsContent() {
                 : (repeatWeekly ? "Add Weekly Availability" : "Add Availability")}
           </Btn>
         </div>
+      </Modal>
+
+      <Modal
+        open={!!bookedSlotDetails}
+        onClose={() => setBookedSlotDetails(null)}
+        title="Booked Slot Details"
+      >
+        {bookedSlotDetails && (
+          <div className="space-y-3">
+            <p className="text-white/60 text-sm font-body">{formatDateTime(bookedSlotDetails.datetime)}</p>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-1">
+              <p className="text-xs text-white/45 uppercase tracking-wide">Interviewee</p>
+              <p className="text-sm text-white/90 font-body">
+                {bookedSlotDetails.bookerName?.trim() || "Unknown"}
+              </p>
+              <p className="text-sm text-white/70 font-body">
+                {bookedSlotDetails.bookerEmail?.trim() || "No email"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-1">
+              <p className="text-xs text-white/45 uppercase tracking-wide">Interviewer</p>
+              <p className="text-sm text-white/85 font-body">
+                {(() => {
+                  const names = getSlotInterviewerNames(bookedSlotDetails);
+                  return names.length > 0 ? names.join(", ") : "Not set";
+                })()}
+              </p>
+            </div>
+            <div className="flex justify-end pt-1">
+              <Btn variant="ghost" onClick={() => setBookedSlotDetails(null)}>
+                Close
+              </Btn>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <Modal

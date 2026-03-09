@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import type { InterviewSlot } from "@/lib/members/storage";
 
+const ET_TIMEZONE = "America/New_York";
+
 function downloadICS(slot: InterviewSlot, zoomLink: string) {
   const start = new Date(slot.datetime);
   const end = new Date(start.getTime() + (slot.durationMinutes ?? 30) * 60000);
@@ -62,18 +64,25 @@ function formatDayHeading(isoDate: string): string {
 
 function formatTime(isoDatetime: string): string {
   const d = new Date(isoDatetime);
-  const h = d.getHours();
-  const m = String(d.getMinutes()).padStart(2, "0");
-  return `${h % 12 || 12}:${m} ${h >= 12 ? "PM" : "AM"}`;
+  return d.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: ET_TIMEZONE,
+    timeZoneName: "short",
+  });
 }
 
 function formatConfirmed(iso: string): string {
   const d = new Date(iso);
-  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const mos = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const h = d.getHours();
-  const m = String(d.getMinutes()).padStart(2, "0");
-  return `${days[d.getDay()]}, ${mos[d.getMonth()]} ${d.getDate()} - ${h % 12 || 12}:${m} ${h >= 12 ? "PM" : "AM"}`;
+  return d.toLocaleString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: ET_TIMEZONE,
+    timeZoneName: "short",
+  });
 }
 
 type PageState = "loading" | "enter_info" | "choose_slot" | "confirmed" | "error";
@@ -334,6 +343,7 @@ export default function BookPage() {
             <div className="px-6 py-5 border-b border-white/8">
               <h2 className="text-white font-bold text-xl">Hi, {bookerName || "there"}!</h2>
               <p className="text-white/50 text-sm mt-1 font-body">Pick a time that works for you.</p>
+              <p className="text-white/40 text-xs mt-1 font-body">All times are shown in New York time (EST/EDT).</p>
             </div>
 
             {slots.length === 0 ? (

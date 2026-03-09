@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbPatch, dbPush, dbRead, verifyCaller } from "@/lib/server/adminApi";
 import { resolveInterviewZoomSettings } from "@/lib/interviews/config";
-import { sendInterviewRescheduledEmail } from "@/lib/server/interviewEmail";
+import { pickIcsOrganizer, resolveInterviewerContacts } from "@/lib/server/interviewerResolver";
+import {
+  sendInterviewerRescheduledNotificationEmail,
+  sendInterviewRescheduledEmail,
+} from "@/lib/server/interviewEmail";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -26,10 +30,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_slots" }, { status: 400 });
   }
 
-  const [fromData, toData, settingsData] = await Promise.all([
+  const [fromData, toData, settingsData, teamData] = await Promise.all([
     dbRead(`interviewSlots/${fromSlotId}`, verified.caller.idToken),
     dbRead(`interviewSlots/${toSlotId}`, verified.caller.idToken),
     dbRead("interviewSettings", verified.caller.idToken).catch(() => null),
+    dbRead("team", verified.caller.idToken).catch(() => null),
   ]);
 
   if (!fromData || !toData) {
@@ -92,6 +97,8 @@ export async function POST(req: NextRequest) {
   }, verified.caller.idToken).catch(() => {});
 
   const zoom = resolveInterviewZoomSettings(settingsData, process.env.INTERVIEW_ZOOM_LINK ?? "");
+  const interviewerContacts = resolveInterviewerContacts(toSlot, teamData);
+  const organizer = pickIcsOrganizer(interviewerContacts, process.env.INTERVIEW_EMAIL_FROM ?? "");
   const durationMinutes = Number(toSlot.durationMinutes ?? 30);
   const location = typeof toSlot.location === "string" ? toSlot.location : "";
   if (fromEmail && fromDatetime && toDatetime) {
@@ -104,7 +111,27 @@ export async function POST(req: NextRequest) {
       durationMinutes: Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : 30,
       zoomLink: zoom.zoomLink,
       location,
+      organizerName: organizer.name,
+      organizerEmail: organizer.email,
     }).catch(() => {});
+    const sent = new Set<string>();
+    for (const contact of interviewerContacts) {
+      const email = contact.email.trim().toLowerCase();
+      if (!email || sent.has(email)) continue;
+      sent.add(email);
+      await sendInterviewerRescheduledNotificationEmail({
+        to: contact.email,
+        interviewerName: contact.name,
+        bookerName: fromName,
+        bookerEmail: fromEmail,
+        previousDatetimeIso: fromDatetime,
+        datetimeIso: toDatetime,
+        durationMinutes: Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : 30,
+        zoomLink: zoom.zoomLink,
+        location,
+        slotId: toSlotId,
+      }).catch(() => {});
+    }
   }
 
   return NextResponse.json({ success: true });
