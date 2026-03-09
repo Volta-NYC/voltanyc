@@ -219,8 +219,8 @@ export default function BIDTrackerPage() {
               key={bid.id}
               className="bg-[#1C1F26] border border-white/8 rounded-xl p-3 sm:p-4"
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-1 min-w-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-2 min-w-0 flex-1">
                   <p className="text-white font-semibold truncate">{bid.name}</p>
                   <div className="flex flex-wrap items-center gap-1.5 text-xs text-white/45">
                     <span>{bid.borough || "No borough"}</span>
@@ -235,19 +235,17 @@ export default function BIDTrackerPage() {
                       </>
                     )}
                   </div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  {canEdit && (
-                    <div className="flex items-center gap-1.5">
-                      <Btn size="sm" variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => openEdit(bid)}>Edit</Btn>
-                      <Btn size="sm" variant="danger" className="px-2.5 py-1 text-xs" onClick={() => handleDelete(bid.id)}>Delete</Btn>
-                    </div>
-                  )}
-                  <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <Badge label={bid.status} />
                     <Badge label={bid.priority} />
                   </div>
                 </div>
+                {canEdit && (
+                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                    <Btn size="sm" variant="secondary" className="px-2.5 py-1 text-xs w-full sm:w-auto" onClick={() => openEdit(bid)}>Edit</Btn>
+                    <Btn size="sm" variant="danger" className="px-2.5 py-1 text-xs w-full sm:w-auto" onClick={() => handleDelete(bid.id)}>Delete</Btn>
+                  </div>
+                )}
               </div>
 
               {(bid.nextAction || bid.notes) && (
