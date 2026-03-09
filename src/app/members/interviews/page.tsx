@@ -143,9 +143,25 @@ function parseDateInput(raw: string): string | null {
     return null;
   }
 
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return toDateString(parsed);
+  const usMatch = value.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+  if (usMatch) {
+    const currentYear = new Date().getFullYear();
+    const m = Number.parseInt(usMatch[1], 10);
+    const d = Number.parseInt(usMatch[2], 10);
+    let y = usMatch[3] ? Number.parseInt(usMatch[3], 10) : currentYear;
+    if (String(y).length === 2) y += 2000;
+    const dt = new Date(y, m - 1, d);
+    if (
+      !Number.isNaN(dt.getTime())
+      && dt.getFullYear() === y
+      && dt.getMonth() === m - 1
+      && dt.getDate() === d
+    ) {
+      return toDateString(dt);
+    }
+  }
+
+  return null;
 }
 
 function parseTimeInput(raw: string): { hour: number; minute: number } | null {
@@ -993,28 +1009,36 @@ function InterviewsContent() {
       return;
     }
 
-    const baseDates: string[] = [];
-    for (let d = new Date(startDateObj); d.getTime() <= endDateObj.getTime(); d.setDate(d.getDate() + 1)) {
-      baseDates.push(toDateString(d));
-    }
-
     const endTs = planningWindowEnd(windowAnchor).getTime();
     const seriesId = manualRepeatWeekly ? buildRecurringSeriesId() : "";
     const uniqueTargets: Record<string, DragCell> = {};
-    baseDates.forEach((baseDate) => {
+
+    // Build per-day time ranges first (date-by-date), then apply weekly repeat.
+    const baseTargets: DragCell[] = [];
+    for (let d = new Date(startDateObj); d.getTime() <= endDateObj.getTime(); d.setDate(d.getDate() + 1)) {
+      const dateISO = toDateString(d);
+      for (let t = startMinutes; t < endMinutes; t += 15) {
+        const hour = Math.floor(t / 60);
+        const minute = t % 60;
+        if (!GRID_HOURS.includes(hour) || !QUARTER_MINUTES.includes(minute as (typeof QUARTER_MINUTES)[number])) continue;
+        const rowIndex = rowIndexFromTime(hour, minute);
+        baseTargets.push({ dateISO, hour, minute, rowIndex });
+      }
+    }
+
+    baseTargets.forEach((base) => {
       for (let week = 0; week < 60; week += 1) {
-        const date = new Date(`${baseDate}T00:00:00`);
-        date.setDate(date.getDate() + week * 7);
         if (!manualRepeatWeekly && week > 0) break;
+        const date = new Date(`${base.dateISO}T00:00:00`);
+        date.setDate(date.getDate() + week * 7);
         if (date.getTime() > endTs) break;
         const dateISO = toDateString(date);
-        for (let t = startMinutes; t < endMinutes; t += 15) {
-          const hour = Math.floor(t / 60);
-          const minute = t % 60;
-          if (!GRID_HOURS.includes(hour) || !QUARTER_MINUTES.includes(minute as (typeof QUARTER_MINUTES)[number])) continue;
-          const rowIndex = rowIndexFromTime(hour, minute);
-          uniqueTargets[`${dateISO}|${hour}|${minute}`] = { dateISO, hour, minute, rowIndex };
-        }
+        uniqueTargets[`${dateISO}|${base.hour}|${base.minute}`] = {
+          dateISO,
+          hour: base.hour,
+          minute: base.minute,
+          rowIndex: base.rowIndex,
+        };
       }
     });
 
