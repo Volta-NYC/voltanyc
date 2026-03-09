@@ -120,7 +120,7 @@ function buildIcs(input: BookingEmailInput): string {
     `DTSTAMP:${utcStamp(new Date())}`,
     `DTSTART:${utcStamp(start)}`,
     `DTEND:${utcStamp(end)}`,
-    `SUMMARY:${escapeIcs("Volta Interview")}`,
+    `SUMMARY:${escapeIcs("Volta interview")}`,
     `DESCRIPTION:${escapeIcs(descParts.join("\n"))}`,
     organizerEmail
       ? `ORGANIZER;CN=${escapeIcs(organizerName)}:mailto:${escapeIcs(organizerEmail)}`
@@ -130,7 +130,7 @@ function buildIcs(input: BookingEmailInput): string {
     "BEGIN:VALARM",
     "TRIGGER:-PT30M",
     "ACTION:DISPLAY",
-    `DESCRIPTION:${escapeIcs("Volta Interview starts in 30 minutes.")}`,
+    `DESCRIPTION:${escapeIcs("Volta interview starts in 30 minutes.")}`,
     "END:VALARM",
     "END:VEVENT",
     "END:VCALENDAR",
@@ -148,7 +148,7 @@ function buildGoogleCalendarUrl(input: BookingEmailInput): string {
     : "Organized by Volta NYC";
   const params = new URLSearchParams({
     action: "TEMPLATE",
-    text: "Volta Interview",
+    text: "Volta interview",
     dates,
     details,
     location: input.location ?? "",
@@ -217,11 +217,11 @@ export async function sendInterviewBookingEmail(input: BookingEmailInput): Promi
 
   await sendInterviewEmail({
     to: input.to,
-    subject: "Volta Interview Confirmation",
+    subject: "Volta interview Confirmation",
     text: [
       `Hi ${input.bookerName || "there"},`,
       "",
-      "Your Volta Interview is confirmed.",
+      "Your Volta interview is confirmed.",
       `Time: ${timeText}`,
       input.zoomLink ? `Zoom: ${input.zoomLink}` : "Zoom: (will be provided separately)",
       "",
@@ -237,7 +237,7 @@ export async function sendInterviewBookingEmail(input: BookingEmailInput): Promi
     ].join("\n"),
     html: `
       <p>Hi ${input.bookerName || "there"},</p>
-      <p>Your Volta Interview is confirmed.</p>
+      <p>Your Volta interview is confirmed.</p>
       <p>
         <strong>Time:</strong> ${timeText}<br/>
         <strong>Zoom:</strong> ${input.zoomLink ? `<a href="${input.zoomLink}">${input.zoomLink}</a>` : "will be provided separately"}
@@ -266,11 +266,11 @@ export async function sendInterviewRescheduledEmail(input: BookingEmailInput & {
 
   await sendInterviewEmail({
     to: input.to,
-    subject: "Volta Interview Rescheduled",
+    subject: "Volta interview Rescheduled",
     text: [
       `Hi ${input.bookerName || "there"},`,
       "",
-      "Your Volta Interview has been rescheduled.",
+      "Your Volta interview has been rescheduled.",
       `Previous time: ${oldTimeText}`,
       `New time: ${newTimeText}`,
       input.zoomLink ? `Zoom: ${input.zoomLink}` : "Zoom: (will be provided separately)",
@@ -287,7 +287,7 @@ export async function sendInterviewRescheduledEmail(input: BookingEmailInput & {
     ].join("\n"),
     html: `
       <p>Hi ${input.bookerName || "there"},</p>
-      <p>Your <strong>Volta Interview</strong> has been rescheduled.</p>
+      <p>Your <strong>Volta interview</strong> has been rescheduled.</p>
       <p>
         <strong>Previous time:</strong> ${oldTimeText}<br/>
         <strong>New time:</strong> ${newTimeText}<br/>
@@ -321,7 +321,7 @@ export async function sendInterviewerBookingNotificationEmail(input: {
   const timeText = formatTime(input.datetimeIso);
   await sendInterviewEmail({
     to: input.to,
-    subject: "New Volta Interview Scheduled",
+    subject: "New Volta interview Scheduled",
     text: [
       `Hi ${input.interviewerName || "Interviewer"},`,
       "",
@@ -361,7 +361,7 @@ export async function sendInterviewerRescheduledNotificationEmail(input: {
   const newTimeText = formatTime(input.datetimeIso);
   await sendInterviewEmail({
     to: input.to,
-    subject: "Volta Interview Rescheduled to Your Slot",
+    subject: "Volta interview Rescheduled to Your Slot",
     text: [
       `Hi ${input.interviewerName || "Interviewer"},`,
       "",
