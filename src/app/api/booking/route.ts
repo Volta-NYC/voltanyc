@@ -80,9 +80,70 @@ type ExistingBooking = {
   datetime: string;
 };
 
+const THREE_WEEKS_MS = 21 * 24 * 60 * 60 * 1000;
+
 function hasInterviewerMembers(slot: Record<string, unknown>): boolean {
   const ids = slot.interviewerMemberIds;
   return Array.isArray(ids) && ids.some((id) => typeof id === "string" && id.trim().length > 0);
+}
+
+function getInterviewerMemberIds(slot: Record<string, unknown>): string[] {
+  const ids = slot.interviewerMemberIds;
+  if (!Array.isArray(ids)) return [];
+  return Array.from(
+    new Set(
+      ids
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .filter(Boolean),
+    ),
+  );
+}
+
+function formatEtShort(datetimeIso: string): string {
+  const date = new Date(datetimeIso);
+  if (Number.isNaN(date.getTime())) return datetimeIso;
+  const datePart = date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "America/New_York",
+  });
+  const timePart = date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/New_York",
+  });
+  return `${datePart}, ${timePart} ET`;
+}
+
+function buildInterviewerUpcomingSummary(
+  slotsData: unknown,
+  interviewerMemberId: string,
+  nowMs: number,
+): { lines: string[]; total: number } {
+  if (!slotsData || !interviewerMemberId) return { lines: [], total: 0 };
+  const windowEnd = nowMs + THREE_WEEKS_MS;
+  const entries = Object.entries(slotsData as Record<string, Record<string, unknown>>)
+    .map(([, raw]) => raw ?? {})
+    .filter((slot) => {
+      if (!slot || typeof slot !== "object") return false;
+      const row = slot as Record<string, unknown>;
+      if (!row.bookedBy || row.available) return false;
+      const startsAt = new Date(String(row.datetime ?? "")).getTime();
+      if (Number.isNaN(startsAt) || startsAt < nowMs || startsAt > windowEnd) return false;
+      const ids = getInterviewerMemberIds(row);
+      return ids.includes(interviewerMemberId);
+    })
+    .sort((a, b) => new Date(String(a.datetime ?? "")).getTime() - new Date(String(b.datetime ?? "")).getTime());
+
+  const lines = entries.map((slot) => {
+    const row = slot as Record<string, unknown>;
+    const whoName = String(row.bookerName ?? "").trim() || "Interviewee";
+    const whoEmail = String(row.bookerEmail ?? "").trim();
+    const who = whoEmail ? `${whoName} (${whoEmail})` : whoName;
+    return `${formatEtShort(String(row.datetime ?? ""))} — ${who}`;
+  });
+  return { lines, total: lines.length };
 }
 
 async function findExistingBookingsByEmail(email: string, excludeSlotId: string): Promise<ExistingBooking[]> {
@@ -280,11 +341,19 @@ export async function POST(req: NextRequest) {
       }
     } else {
       await sendInterviewBookingEmail(payload).catch(() => {});
+      let allSlotsData: unknown = null;
+      try {
+        allSlotsData = await dbGet("interviewSlots");
+      } catch {
+        allSlotsData = null;
+      }
+      const summaryNow = Date.now();
       const sent = new Set<string>();
       for (const contact of interviewerContacts) {
         const email = contact.email.trim().toLowerCase();
         if (!email || sent.has(email)) continue;
         sent.add(email);
+        const summary = buildInterviewerUpcomingSummary(allSlotsData, contact.memberId, summaryNow);
         await sendInterviewerBookingNotificationEmail({
           to: contact.email,
           interviewerName: contact.name,
@@ -295,6 +364,8 @@ export async function POST(req: NextRequest) {
           zoomLink: zoom.zoomLink,
           location,
           slotId: cleanSlotId,
+          scheduleSummaryLines: summary.lines,
+          scheduleTotal: summary.total,
         }).catch(() => {});
       }
     }

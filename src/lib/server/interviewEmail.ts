@@ -317,8 +317,20 @@ export async function sendInterviewerBookingNotificationEmail(input: {
   zoomLink: string;
   location?: string;
   slotId: string;
+  scheduleSummaryLines?: string[];
+  scheduleTotal?: number;
 }): Promise<void> {
   const timeText = formatTime(input.datetimeIso);
+  const summaryLines = input.scheduleSummaryLines ?? [];
+  const scheduleTotal = Number.isFinite(input.scheduleTotal) ? Number(input.scheduleTotal) : summaryLines.length;
+  const summaryTextBlock = [
+    "Your upcoming interviews (next 3 weeks):",
+    ...summaryLines.map((line) => `- ${line}`),
+    `Total: ${scheduleTotal}`,
+  ];
+  const summaryHtmlLines = summaryLines.length > 0
+    ? `<ul>${summaryLines.map((line) => `<li>${line}</li>`).join("")}</ul>`
+    : "<ul><li>No upcoming interviews in this window.</li></ul>";
   await sendInterviewEmail({
     to: input.to,
     subject: "New Volta interview Scheduled",
@@ -330,6 +342,8 @@ export async function sendInterviewerBookingNotificationEmail(input: {
       `Time: ${timeText}`,
       input.zoomLink ? `Zoom: ${input.zoomLink}` : "Zoom: (will be provided separately)",
       "",
+      ...summaryTextBlock,
+      "",
       "You can review details in the member interview panel.",
     ].join("\n"),
     html: `
@@ -340,6 +354,9 @@ export async function sendInterviewerBookingNotificationEmail(input: {
         <strong>Time:</strong> ${timeText}<br/>
         <strong>Zoom:</strong> ${input.zoomLink ? `<a href="${input.zoomLink}">${input.zoomLink}</a>` : "will be provided separately"}
       </p>
+      <p><strong>Your upcoming interviews (next 3 weeks):</strong></p>
+      ${summaryHtmlLines}
+      <p><strong>Total:</strong> ${scheduleTotal}</p>
       <p>You can review details in the member interview panel.</p>
     `,
   });

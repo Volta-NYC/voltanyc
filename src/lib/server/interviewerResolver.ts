@@ -1,4 +1,5 @@
 export type InterviewerContact = {
+  memberId: string;
   name: string;
   email: string;
 };
@@ -6,7 +7,6 @@ export type InterviewerContact = {
 type TeamRecord = {
   name?: unknown;
   email?: unknown;
-  alternateEmail?: unknown;
 };
 
 function toTrimmedString(value: unknown): string {
@@ -43,10 +43,11 @@ export function resolveInterviewerContacts(
     if (!name) continue;
 
     const primaryEmail = normalizeEmail(toTrimmedString(value.email));
-    const alternateEmail = normalizeEmail(toTrimmedString(value.alternateEmail));
-    const email = primaryEmail || alternateEmail;
+    const email = primaryEmail;
+    if (!email) continue;
 
     const contact = {
+      memberId: id,
       name,
       email,
     };
@@ -64,7 +65,7 @@ export function resolveInterviewerContacts(
   const deduped: InterviewerContact[] = [];
   const seen = new Set<string>();
   for (const contact of resolved) {
-    const key = `${normalizeName(contact.name)}|${normalizeEmail(contact.email)}`;
+    const key = contact.memberId || `${normalizeName(contact.name)}|${normalizeEmail(contact.email)}`;
     if (seen.has(key)) continue;
     seen.add(key);
     deduped.push(contact);
@@ -82,12 +83,14 @@ export function pickIcsOrganizer(
   const firstNamed = contacts.find((c) => c.name);
   if (firstNamed) {
     return {
+      memberId: firstNamed.memberId || "",
       name: firstNamed.name,
       email: firstNamed.email || fallbackEmail,
     };
   }
 
   return {
+    memberId: "",
     name: "Volta NYC",
     email: fallbackEmail,
   };
