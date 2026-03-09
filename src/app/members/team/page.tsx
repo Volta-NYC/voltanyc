@@ -61,7 +61,7 @@ function normalizeKey(v: string): string {
   return normalizeText(v).toLowerCase();
 }
 
-function parseCsvLine(line: string): string[] {
+function parseDelimitedLine(line: string, delimiter: string): string[] {
   const cells: string[] = [];
   let current = "";
   let inQuotes = false;
@@ -77,7 +77,7 @@ function parseCsvLine(line: string): string[] {
       }
       continue;
     }
-    if (ch === "," && !inQuotes) {
+    if (ch === delimiter && !inQuotes) {
       cells.push(current);
       current = "";
       continue;
@@ -89,12 +89,47 @@ function parseCsvLine(line: string): string[] {
   return cells.map((c) => c.trim());
 }
 
+function countDelimiterOutsideQuotes(line: string, delimiter: string): number {
+  let inQuotes = false;
+  let count = 0;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === "\"") {
+      if (inQuotes && line[i + 1] === "\"") {
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (!inQuotes && ch === delimiter) count += 1;
+  }
+  return count;
+}
+
+function detectDelimiter(headerLine: string): string {
+  const delimiters = [",", "\t", ";"];
+  let best = ",";
+  let bestCount = -1;
+  for (const d of delimiters) {
+    const count = countDelimiterOutsideQuotes(headerLine, d);
+    if (count > bestCount) {
+      best = d;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
 function parseCsv(csvText: string): string[][] {
-  return csvText
+  const lines = csvText
     .replace(/^\uFEFF/, "")
     .split(/\r?\n/)
-    .filter((line) => line.trim() !== "")
-    .map(parseCsvLine);
+    .filter((line) => line.trim() !== "");
+  if (lines.length === 0) return [];
+
+  const delimiter = detectDelimiter(lines[0]);
+  return lines.map((line) => parseDelimitedLine(line, delimiter));
 }
 
 function headerKey(raw: string): string {
@@ -168,9 +203,15 @@ export default function TeamPage() {
       const schoolIdx = findHeaderIndex(headers, ["school", "school name", "high school", "high school name"]);
       const gradeIdx = findHeaderIndex(headers, ["grade", "year", "class year"]);
       const trackIdx = findHeaderIndex(headers, ["track", "division"]);
+      const hasAnySupportedHeader = [nameIdx, emailIdx, schoolIdx, gradeIdx, trackIdx].some((idx) => idx !== -1);
 
-      if (nameIdx === -1 || emailIdx === -1 || schoolIdx === -1 || gradeIdx === -1 || trackIdx === -1) {
-        setImportMessage("CSV must include headers: Name, Email, School, Grade, Track.");
+      if (!hasAnySupportedHeader) {
+        setImportMessage("CSV must include at least one supported header: Name, Email, School, Grade, or Track.");
+        return;
+      }
+
+      if (nameIdx === -1 && emailIdx === -1) {
+        setImportMessage("CSV must include Name or Email so rows can be matched to members.");
         return;
       }
 
@@ -178,11 +219,11 @@ export default function TeamPage() {
       let invalidRows = 0;
 
       for (const row of rows.slice(1)) {
-        const name = normalizeText(row[nameIdx] ?? "");
-        const email = normalizeText(row[emailIdx] ?? "");
-        const school = normalizeText(row[schoolIdx] ?? "");
-        const grade = normalizeText(row[gradeIdx] ?? "");
-        const track = parseTrack(row[trackIdx] ?? "");
+        const name = nameIdx === -1 ? "" : normalizeText(row[nameIdx] ?? "");
+        const email = emailIdx === -1 ? "" : normalizeText(row[emailIdx] ?? "");
+        const school = schoolIdx === -1 ? "" : normalizeText(row[schoolIdx] ?? "");
+        const grade = gradeIdx === -1 ? "" : normalizeText(row[gradeIdx] ?? "");
+        const track = trackIdx === -1 ? "—" : parseTrack(row[trackIdx] ?? "");
         if (!name && !email) {
           invalidRows += 1;
           continue;
