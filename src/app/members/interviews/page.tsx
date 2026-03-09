@@ -2009,7 +2009,7 @@ function InterviewsContent() {
                     onChange={() => setRemoveWeekly(true)}
                     className="accent-[#85CC17] w-4 h-4"
                   />
-                  Weekly series (same time in upcoming weeks)
+                  Recurring weekly
                 </label>
               </div>
             </>
