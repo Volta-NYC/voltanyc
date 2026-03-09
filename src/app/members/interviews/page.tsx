@@ -290,7 +290,7 @@ function InterviewsContent() {
   const [dragMode, setDragMode] = useState<DragMode | null>(null);
   const [draggingSelection, setDraggingSelection] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
-  const [repeatWeekly, setRepeatWeekly] = useState(false);
+  const [repeatWeekly, setRepeatWeekly] = useState(true);
   const [removeWeekly, setRemoveWeekly] = useState(false);
   const [batchInterviewers, setBatchInterviewers] = useState<string[]>([]);
   const [bookedSlotDetails, setBookedSlotDetails] = useState<InterviewSlot | null>(null);
@@ -300,7 +300,7 @@ function InterviewsContent() {
   const [manualEndDateInput, setManualEndDateInput] = useState(toDateString(new Date()));
   const [manualStartTimeInput, setManualStartTimeInput] = useState("9:00 AM");
   const [manualEndTimeInput, setManualEndTimeInput] = useState("10:00 AM");
-  const [manualRepeatWeekly, setManualRepeatWeekly] = useState(false);
+  const [manualRepeatWeekly, setManualRepeatWeekly] = useState(true);
   const [manualInterviewers, setManualInterviewers] = useState<string[]>([]);
   const [manualAddMessage, setManualAddMessage] = useState<string | null>(null);
   const [addingManualAvailability, setAddingManualAvailability] = useState(false);
@@ -1187,7 +1187,7 @@ function InterviewsContent() {
 
   const closeBatchModal = () => {
     setShowBatchModal(false);
-    setRepeatWeekly(false);
+    setRepeatWeekly(true);
     setRemoveWeekly(false);
     setBatchInterviewers([]);
     setSelectedInterviewers([]);
@@ -1302,7 +1302,7 @@ function InterviewsContent() {
       setDraggingSelection(false);
       const selectionCount = Object.keys(dragSelectionRef.current).length;
       if (selectionCount >= 1 && dragModeRef.current) {
-        setRepeatWeekly(false);
+        setRepeatWeekly(dragModeRef.current === "add");
         setRemoveWeekly(false);
         if (dragModeRef.current === "add") {
           setBatchInterviewers([]);
