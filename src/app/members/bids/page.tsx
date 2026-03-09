@@ -105,7 +105,17 @@ export default function BIDTrackerPage() {
     setModal(null);
   };
 
-  const handleDelete = (id: string) => ask(async () => deleteBID(id));
+  const handleDeleteFromEdit = async () => {
+    if (!editingBID) return;
+    const name = editingBID.name || "this BID";
+    await ask(
+      async () => {
+        await deleteBID(editingBID.id);
+        setModal(null);
+      },
+      `Delete "${name}"? This permanently removes it from the BID tracker.`,
+    );
+  };
 
   const defaultTimelineDraft = () => ({
     date: new Date().toISOString().split("T")[0],
@@ -243,7 +253,6 @@ export default function BIDTrackerPage() {
                 {canEdit && (
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <Btn size="sm" variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => openEdit(bid)}>Edit</Btn>
-                    <Btn size="sm" variant="danger" className="px-2.5 py-1 text-xs" onClick={() => handleDelete(bid.id)}>Delete</Btn>
                   </div>
                 )}
               </div>
@@ -369,6 +378,11 @@ export default function BIDTrackerPage() {
         </div>
 
         <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-white/8">
+          {editingBID && (
+            <Btn variant="danger" onClick={() => void handleDeleteFromEdit()}>
+              Delete BID
+            </Btn>
+          )}
           <Btn variant="ghost" onClick={() => setModal(null)}>Cancel</Btn>
           <Btn variant="primary" onClick={handleSave}>{editingBID ? "Save Changes" : "Create BID"}</Btn>
         </div>

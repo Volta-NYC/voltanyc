@@ -106,6 +106,18 @@ export default function BusinessesPage() {
     setModal(null);
   };
 
+  const handleDeleteFromEdit = async () => {
+    if (!editingBusiness) return;
+    const name = editingBusiness.name || "this project";
+    await ask(
+      async () => {
+        await deleteBusiness(editingBusiness.id);
+        setModal(null);
+      },
+      `Delete "${name}"? This permanently removes the project from the tracker.`,
+    );
+  };
+
   const statusMatchesPage = (status: Business["projectStatus"]) => {
     if (statusPage === "active_planning") return status === "Active" || status === "Not Started";
     if (statusPage === "completed") return status === "Complete";
@@ -267,8 +279,7 @@ export default function BusinessesPage() {
       {/* Actions */}
       {canEdit && (
         <div className="flex gap-2 pt-2 border-t border-white/5 mt-auto">
-          <Btn size="sm" variant="secondary" className="flex-1 justify-center" onClick={() => openEdit(b)}>Edit</Btn>
-          <Btn size="sm" variant="danger" onClick={() => ask(async () => deleteBusiness(b.id))}>Delete</Btn>
+          <Btn size="sm" variant="secondary" className="w-full justify-center" onClick={() => openEdit(b)}>Edit</Btn>
         </div>
       )}
     </div>
@@ -464,6 +475,11 @@ export default function BusinessesPage() {
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-white/8">
+          {editingBusiness && (
+            <Btn variant="danger" onClick={() => void handleDeleteFromEdit()}>
+              Delete Project
+            </Btn>
+          )}
           <Btn variant="ghost" onClick={() => setModal(null)}>Cancel</Btn>
           <Btn variant="primary" onClick={handleSave}>{editingBusiness ? "Save" : "Create"}</Btn>
         </div>
