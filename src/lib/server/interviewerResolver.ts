@@ -34,17 +34,27 @@ function parseInterviewerNames(slot: Record<string, unknown>): string[] {
   return [];
 }
 
+function parseInterviewerMemberIds(slot: Record<string, unknown>): string[] {
+  const list = slot.interviewerMemberIds;
+  if (!Array.isArray(list)) return [];
+  const cleaned = list.map(toTrimmedString).filter(Boolean);
+  return Array.from(new Set(cleaned));
+}
+
 export function resolveInterviewerContacts(
   slot: Record<string, unknown>,
   teamData: unknown,
 ): InterviewerContact[] {
-  const interviewerNames = parseInterviewerNames(slot);
-  if (interviewerNames.length === 0) return [];
-
   const team = (teamData ?? {}) as Record<string, TeamRecord>;
-  const byName = new Map<string, InterviewerContact>();
+  const interviewerIds = parseInterviewerMemberIds(slot);
+  const interviewerNames = parseInterviewerNames(slot);
 
-  for (const value of Object.values(team)) {
+  if (interviewerIds.length === 0 && interviewerNames.length === 0) return [];
+
+  const byName = new Map<string, InterviewerContact>();
+  const byId = new Map<string, InterviewerContact>();
+
+  for (const [id, value] of Object.entries(team)) {
     const name = toTrimmedString(value.name);
     if (!name) continue;
 
@@ -52,13 +62,34 @@ export function resolveInterviewerContacts(
     const alternateEmail = normalizeEmail(toTrimmedString(value.alternateEmail));
     const email = primaryEmail || alternateEmail;
 
-    byName.set(normalizeName(name), {
+    const contact = {
       name,
       email,
-    });
+    };
+    byName.set(normalizeName(name), contact);
+    byId.set(id, contact);
   }
 
   const resolved: InterviewerContact[] = [];
+  for (const memberId of interviewerIds) {
+    const byMemberId = byId.get(memberId);
+    if (byMemberId) {
+      resolved.push(byMemberId);
+    }
+  }
+
+  if (resolved.length > 0) {
+    const deduped: InterviewerContact[] = [];
+    const seen = new Set<string>();
+    for (const contact of resolved) {
+      const key = `${normalizeName(contact.name)}|${normalizeEmail(contact.email)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(contact);
+    }
+    return deduped;
+  }
+
   for (const rawName of interviewerNames) {
     const normalized = normalizeName(rawName);
     const match = byName.get(normalized);

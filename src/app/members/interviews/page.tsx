@@ -187,7 +187,7 @@ function mapZoomSaveError(code: string): string {
   return "Could not save zoom link. Try again.";
 }
 
-function normalizeInterviewerNames(values: string[]): string[] {
+function normalizeInterviewerMemberIds(values: string[]): string[] {
   return Array.from(
     new Set(
       (values ?? [])
@@ -197,7 +197,16 @@ function normalizeInterviewerNames(values: string[]): string[] {
   );
 }
 
-function getSlotInterviewerNames(slot: InterviewSlot): string[] {
+function getSlotInterviewerNames(slot: InterviewSlot, memberNameById: Record<string, string>): string[] {
+  const ids = Array.isArray(slot.interviewerMemberIds)
+    ? slot.interviewerMemberIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+    : [];
+  if (ids.length > 0) {
+    return ids
+      .map((id) => memberNameById[id] || "")
+      .map((name) => name.trim())
+      .filter(Boolean);
+  }
   return Array.isArray(slot.interviewerNames)
     ? slot.interviewerNames.map((name) => String(name ?? "").trim()).filter(Boolean)
     : [];
@@ -364,7 +373,8 @@ function InterviewsContent() {
             datetime: dt,
             durationMinutes: template.durationMinutes || 15,
             available: true,
-            interviewerNames: normalizeInterviewerNames(template.interviewerNames ?? []),
+            interviewerMemberIds: normalizeInterviewerMemberIds(template.interviewerMemberIds ?? []),
+            interviewerNames: interviewerNamesFromIds(template.interviewerMemberIds ?? []),
             recurringWeekly: true,
             recurringSeriesId: template.recurringSeriesId,
             location: template.location ?? "",
@@ -489,17 +499,81 @@ function InterviewsContent() {
     [slots]
   );
 
+  const memberNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    teamMembers.forEach((member) => {
+      if (!member.id) return;
+      const name = (member.name ?? "").trim();
+      if (!name) return;
+      map[member.id] = name;
+    });
+    return map;
+  }, [teamMembers]);
+
+  const interviewerDisplayOptions = useMemo(() => {
+    const nameCounts = new Map<string, number>();
+    teamMembers.forEach((member) => {
+      const name = (member.name ?? "").trim();
+      if (!name) return;
+      nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+    });
+
+    return teamMembers
+      .map((member) => {
+        const id = member.id;
+        const name = (member.name ?? "").trim();
+        if (!id || !name) return null;
+        const email = (member.email ?? "").trim();
+        const needsEmail = (nameCounts.get(name) ?? 0) > 1;
+        const display = needsEmail && email ? `${name} <${email}>` : name;
+        return { id, display };
+      })
+      .filter((value): value is { id: string; display: string } => !!value)
+      .sort((a, b) => a.display.localeCompare(b.display));
+  }, [teamMembers]);
+
   const interviewerOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          teamMembers
-            .map((member) => member.name?.trim() ?? "")
-            .filter((name) => name.length > 0)
-        )
-      ).sort((a, b) => a.localeCompare(b)),
-    [teamMembers]
+    () => interviewerDisplayOptions.map((option) => option.display),
+    [interviewerDisplayOptions]
   );
+
+  const interviewerIdByDisplay = useMemo(() => {
+    const map: Record<string, string> = {};
+    interviewerDisplayOptions.forEach((option) => {
+      map[option.display] = option.id;
+    });
+    return map;
+  }, [interviewerDisplayOptions]);
+
+  const interviewerIdsFromDisplays = (displays: string[]): string[] =>
+    normalizeInterviewerMemberIds(
+      displays
+        .map((display) => interviewerIdByDisplay[display] ?? "")
+        .filter(Boolean)
+    );
+
+  const interviewerNamesFromIds = (ids: string[]): string[] =>
+    normalizeInterviewerMemberIds(ids)
+      .map((id) => memberNameById[id] ?? "")
+      .map((name) => name.trim())
+      .filter(Boolean);
+
+  const interviewerDisplaysFromSlot = (slot: InterviewSlot): string[] => {
+    const ids = Array.isArray(slot.interviewerMemberIds)
+      ? slot.interviewerMemberIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+      : [];
+    const byIds = ids
+      .map((id) => interviewerDisplayOptions.find((option) => option.id === id)?.display ?? "")
+      .filter(Boolean);
+    if (byIds.length > 0) return byIds;
+
+    const legacyNames = Array.isArray(slot.interviewerNames)
+      ? slot.interviewerNames.map((value) => String(value ?? "").trim()).filter(Boolean)
+      : [];
+    return legacyNames
+      .map((name) => interviewerDisplayOptions.find((option) => option.display === name || option.display.startsWith(`${name} <`))?.display ?? "")
+      .filter(Boolean);
+  };
 
   const typedDateOptions = useMemo(() => {
     const start = new Date(windowAnchor);
@@ -706,8 +780,9 @@ function InterviewsContent() {
   const makeAvailabilityWeekly = (slot: InterviewSlot) => {
     if (!canDeleteInterviews) return;
     if (!slot.available || !!slot.bookedBy) return;
-    const slotInterviewers = normalizeInterviewerNames(slot.interviewerNames ?? []);
-    if (slotInterviewers.length === 0) {
+    const slotInterviewerIds = normalizeInterviewerMemberIds(slot.interviewerMemberIds ?? []);
+    const slotInterviewers = interviewerNamesFromIds(slotInterviewerIds);
+    if (slotInterviewerIds.length === 0 || slotInterviewers.length === 0) {
       setAvailableMessage("At least one interviewer is required.");
       setTimeout(() => setAvailableMessage(null), 2200);
       return;
@@ -731,6 +806,7 @@ function InterviewsContent() {
             datetime: dt,
             durationMinutes: slot.durationMinutes || 15,
             available: true,
+            interviewerMemberIds: slotInterviewerIds,
             interviewerNames: slotInterviewers,
             recurringWeekly: true,
             recurringSeriesId: seriesId,
@@ -754,14 +830,15 @@ function InterviewsContent() {
 
   const openEditAvailableSlot = (slot: InterviewSlot) => {
     setEditingAvailableSlot(slot);
-    setEditingAvailableInterviewers(getSlotInterviewerNames(slot));
+    setEditingAvailableInterviewers(interviewerDisplaysFromSlot(slot));
     setApplyAvailableEditWeekly(!!slot.recurringWeekly && !!slot.recurringSeriesId);
   };
 
   const saveAvailableInterviewerEdit = async () => {
     if (!editingAvailableSlot || !canDeleteInterviews) return;
-    const names = normalizeInterviewerNames(editingAvailableInterviewers);
-    if (names.length === 0) {
+    const ids = interviewerIdsFromDisplays(editingAvailableInterviewers);
+    const names = interviewerNamesFromIds(ids);
+    if (ids.length === 0 || names.length === 0) {
       setAvailableMessage("At least one interviewer is required.");
       setTimeout(() => setAvailableMessage(null), 2200);
       return;
@@ -779,12 +856,14 @@ function InterviewsContent() {
         for (const target of targets) {
           // eslint-disable-next-line no-await-in-loop
           await updateInterviewSlot(target.id, {
+            interviewerMemberIds: ids,
             interviewerNames: names,
           });
         }
         setAvailableMessage(`Updated interviewer(s) on ${targets.length} weekly slot(s).`);
       } else {
         await updateInterviewSlot(editingAvailableSlot.id, {
+          interviewerMemberIds: ids,
           interviewerNames: names,
         });
         setAvailableMessage("Updated interviewer(s).");
@@ -801,12 +880,13 @@ function InterviewsContent() {
     hour: number,
     minute: number,
     mode: DragMode,
-    interviewerNamesInput?: string[],
+    interviewerSelectionsInput?: string[],
     recurring?: { enabled: boolean; seriesId?: string }
   ) => {
     const key = slotKey(dateISO, hour, minute);
     const slot = slotMap[key];
-    const interviewerNames = normalizeInterviewerNames(interviewerNamesInput ?? []);
+    const interviewerIds = interviewerIdsFromDisplays(interviewerSelectionsInput ?? []);
+    const interviewerNames = interviewerNamesFromIds(interviewerIds);
 
     if (mode === "remove") {
       if (!canDeleteInterviews || !slot || !slot.available || slot.bookedBy) return;
@@ -818,15 +898,16 @@ function InterviewsContent() {
       if (slot.bookedBy) return;
       const patch: Partial<InterviewSlot> = {};
       if (!slot.available) {
-        if (interviewerNames.length === 0) return;
+        if (interviewerIds.length === 0 || interviewerNames.length === 0) return;
         patch.available = true;
       }
-      const currentNames = getSlotInterviewerNames(slot);
-      if (interviewerNames.length > 0) {
+      const currentIds = normalizeInterviewerMemberIds(slot.interviewerMemberIds ?? []);
+      if (interviewerIds.length > 0) {
         const same =
-          currentNames.length === interviewerNames.length
-          && currentNames.every((value, idx) => value === interviewerNames[idx]);
+          currentIds.length === interviewerIds.length
+          && currentIds.every((value, idx) => value === interviewerIds[idx]);
         if (!same) {
+          patch.interviewerMemberIds = interviewerIds;
           patch.interviewerNames = interviewerNames;
         }
       }
@@ -840,12 +921,13 @@ function InterviewsContent() {
       return;
     }
 
-    if (interviewerNames.length === 0) return;
+    if (interviewerIds.length === 0 || interviewerNames.length === 0) return;
     await createInterviewSlot({
       datetime: `${key}:00`,
       durationMinutes: 15,
       available: true,
       location: "",
+      interviewerMemberIds: interviewerIds,
       interviewerNames,
       recurringWeekly: !!recurring?.enabled,
       recurringSeriesId: recurring?.enabled ? (recurring.seriesId || buildRecurringSeriesId()) : undefined,
@@ -920,7 +1002,7 @@ function InterviewsContent() {
       setManualAddMessage("Enter valid start and end times in 15-minute increments.");
       return;
     }
-    if (normalizeInterviewerNames(manualInterviewers).length === 0) {
+    if (interviewerIdsFromDisplays(manualInterviewers).length === 0) {
       setManualAddMessage("At least one interviewer is required.");
       return;
     }
@@ -1099,7 +1181,7 @@ function InterviewsContent() {
     }
 
     const shouldRepeatWeekly = dragMode === "remove" ? removeWeekly : repeatWeekly;
-    if (dragMode === "add" && normalizeInterviewerNames(batchInterviewers).length === 0) {
+    if (dragMode === "add" && interviewerIdsFromDisplays(batchInterviewers).length === 0) {
       setAvailableMessage("At least one interviewer is required.");
       setTimeout(() => setAvailableMessage(null), 2200);
       return;
@@ -1146,8 +1228,9 @@ function InterviewsContent() {
   const saveSelectedInterviewers = async () => {
     if (!canDeleteInterviews) return;
     if (dragMode !== "remove") return;
-    const names = normalizeInterviewerNames(selectedInterviewers);
-    if (names.length === 0) {
+    const ids = interviewerIdsFromDisplays(selectedInterviewers);
+    const names = interviewerNamesFromIds(ids);
+    if (ids.length === 0 || names.length === 0) {
       setAvailableMessage("At least one interviewer is required.");
       setTimeout(() => setAvailableMessage(null), 2200);
       return;
@@ -1180,11 +1263,12 @@ function InterviewsContent() {
         const key = slotKey(cell.dateISO, cell.hour, cell.minute);
         const slot = slotMap[key];
         if (!slot || !slot.available || slot.bookedBy) continue;
-        const current = getSlotInterviewerNames(slot);
-        const same = current.length === names.length && current.every((value, idx) => value === names[idx]);
+        const current = normalizeInterviewerMemberIds(slot.interviewerMemberIds ?? []);
+        const same = current.length === ids.length && current.every((value, idx) => value === ids[idx]);
         if (same) continue;
         // eslint-disable-next-line no-await-in-loop
         await updateInterviewSlot(slot.id, {
+          interviewerMemberIds: ids,
           interviewerNames: names,
         });
       }
@@ -1209,7 +1293,7 @@ function InterviewsContent() {
           if (entries.length === 1) {
             const cell = entries[0];
             const slot = slotMap[slotKey(cell.dateISO, cell.hour, cell.minute)];
-            setSelectedInterviewers(slot ? getSlotInterviewerNames(slot) : []);
+            setSelectedInterviewers(slot ? interviewerDisplaysFromSlot(slot) : []);
           } else {
             setSelectedInterviewers([]);
           }
@@ -1398,7 +1482,7 @@ function InterviewsContent() {
               <div className="space-y-2">
                 {daySlots.map((slot) => {
                   const displayName = slot.bookerName?.trim() || "Interviewee";
-                  const slotInterviewers = getSlotInterviewerNames(slot);
+                  const slotInterviewers = getSlotInterviewerNames(slot, memberNameById);
                   return (
                     <div key={slot.id} className="bg-[#1C1F26] border border-white/8 rounded-xl px-4 py-3 flex items-center gap-3">
                       <div className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
@@ -1457,7 +1541,7 @@ function InterviewsContent() {
               <div className="space-y-2">
                 {daySlots.map((slot) => {
                   const displayName = slot.bookerName?.trim() || "Interviewee";
-                  const slotInterviewers = getSlotInterviewerNames(slot);
+                  const slotInterviewers = getSlotInterviewerNames(slot, memberNameById);
                   return (
                     <div key={slot.id} className="bg-[#1C1F26] border border-white/8 rounded-xl px-4 py-3 flex items-center gap-3">
                       <div className="w-2 h-2 rounded-full bg-white/30 flex-shrink-0" />
@@ -1741,7 +1825,7 @@ function InterviewsContent() {
                 <div className="space-y-2">
                   {daySlots.map((slot) => {
                     const interviewerText = (() => {
-                      const names = getSlotInterviewerNames(slot);
+                      const names = getSlotInterviewerNames(slot, memberNameById);
                       return names.length > 0 ? names.join(", ") : "Not set";
                     })();
                     return (
@@ -1849,7 +1933,7 @@ function InterviewsContent() {
               <p className="text-xs text-white/45 uppercase tracking-wide">Current Interviewer</p>
               <p className="text-sm text-white/85 font-body">
                 {(() => {
-                  const names = getSlotInterviewerNames(singleSelectedSlot);
+                  const names = getSlotInterviewerNames(singleSelectedSlot, memberNameById);
                   return names.length > 0 ? names.join(", ") : "Not set";
                 })()}
               </p>
@@ -1888,7 +1972,7 @@ function InterviewsContent() {
                 />
               </Field>
               <div className="space-y-2">
-                <p className="text-sm text-white/65 font-body">How should this removal apply?</p>
+                <p className="text-sm text-white/65 font-body">How should this apply?</p>
                 <label className="flex items-center gap-2 text-sm text-white/70 font-body cursor-pointer">
                   <input
                     type="radio"
@@ -1897,7 +1981,7 @@ function InterviewsContent() {
                     onChange={() => setRemoveWeekly(false)}
                     className="accent-[#85CC17] w-4 h-4"
                   />
-                  Remove this availability only
+                  Selected slot(s) only
                 </label>
                 <label className="flex items-center gap-2 text-sm text-white/70 font-body cursor-pointer">
                   <input
@@ -1907,7 +1991,7 @@ function InterviewsContent() {
                     onChange={() => setRemoveWeekly(true)}
                     className="accent-[#85CC17] w-4 h-4"
                   />
-                  Remove all weekly availability for this time
+                  Weekly series (same time in upcoming weeks)
                 </label>
               </div>
             </>
@@ -1919,7 +2003,7 @@ function InterviewsContent() {
           </Btn>
           {dragMode === "remove" && canDeleteInterviews && (
             <Btn variant="secondary" onClick={saveSelectedInterviewers} disabled={applyingBatch}>
-              {applyingBatch ? "Saving..." : "Save Interviewers"}
+              {applyingBatch ? "Saving..." : removeWeekly ? "Save Weekly Interviewers" : "Save Interviewers"}
             </Btn>
           )}
           <Btn
@@ -1957,7 +2041,7 @@ function InterviewsContent() {
               <p className="text-xs text-white/45 uppercase tracking-wide">Interviewer</p>
               <p className="text-sm text-white/85 font-body">
                 {(() => {
-                  const names = getSlotInterviewerNames(bookedSlotDetails);
+                  const names = getSlotInterviewerNames(bookedSlotDetails, memberNameById);
                   return names.length > 0 ? names.join(", ") : "Not set";
                 })()}
               </p>
