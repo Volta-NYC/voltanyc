@@ -43,6 +43,13 @@ function formatDateHeading(isoDate: string): string {
   });
 }
 
+function getSlotEndTimeMs(slot: InterviewSlot): number {
+  const startMs = new Date(slot.datetime).getTime();
+  const rawDuration = Number(slot.durationMinutes ?? 30);
+  const duration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 30;
+  return startMs + duration * 60_000;
+}
+
 const FALLBACK_BOOKING_URL = "https://voltanyc.org/book";
 
 function getMondayForDate(date: Date): Date {
@@ -230,6 +237,7 @@ function InterviewsContent() {
   const [rescheduling, setRescheduling] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [resendingSlotId, setResendingSlotId] = useState("");
+  const [pastMessage, setPastMessage] = useState<string | null>(null);
 
   const [slotWeek, setSlotWeek] = useState(0);
   const [windowAnchor, setWindowAnchor] = useState(() => new Date());
@@ -512,7 +520,7 @@ function InterviewsContent() {
   );
 
   const upcomingBookedSlots = useMemo(
-    () => sortedSlots.filter((s) => !!s.bookedBy && new Date(s.datetime).getTime() >= now),
+    () => sortedSlots.filter((s) => !!s.bookedBy && getSlotEndTimeMs(s) >= now),
     [sortedSlots, now]
   );
 
@@ -527,7 +535,7 @@ function InterviewsContent() {
   }, [upcomingBookedSlots]);
 
   const pastBookedSlots = useMemo(
-    () => sortedSlots.filter((s) => !!s.bookedBy && new Date(s.datetime).getTime() < now),
+    () => sortedSlots.filter((s) => !!s.bookedBy && getSlotEndTimeMs(s) < now),
     [sortedSlots, now]
   );
 
@@ -655,6 +663,15 @@ function InterviewsContent() {
       setResendingSlotId("");
       setTimeout(() => setResendMessage(null), 2200);
     }
+  };
+
+  const deletePastInterviewEntry = (slot: InterviewSlot) => {
+    if (!canDeleteInterviews) return;
+    ask(async () => {
+      await deleteInterviewSlot(slot.id);
+      setPastMessage("Past interview entry deleted.");
+      setTimeout(() => setPastMessage(null), 2200);
+    }, "Delete this past interview entry permanently?");
   };
 
   const removeSingleAvailability = (slot: InterviewSlot) => {
@@ -1428,6 +1445,7 @@ function InterviewsContent() {
 
       {activeTab === "past" && (
         <div className="space-y-5">
+          {pastMessage && <p className="text-xs text-white/55 font-body">{pastMessage}</p>}
           {pastBookedByDate.length === 0 && (
             <div className="bg-[#1C1F26] border border-white/8 rounded-xl p-8 text-center text-white/30 text-sm font-body">
               No past interviews found.
@@ -1453,6 +1471,13 @@ function InterviewsContent() {
                             : ""}
                         </p>
                       </div>
+                      {canDeleteInterviews && (
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Btn size="sm" variant="danger" onClick={() => deletePastInterviewEntry(slot)}>
+                            Delete Entry
+                          </Btn>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1687,6 +1712,10 @@ function InterviewsContent() {
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded bg-[#85CC17]/20 border border-[#85CC17]/40" />
               Visible to applicants
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded bg-red-500/45 border border-red-400/45" />
+              Booked
             </span>
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded bg-white/8" />
