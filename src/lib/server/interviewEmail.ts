@@ -161,6 +161,7 @@ export async function sendInterviewBookingEmail(input: BookingEmailInput): Promi
       "A calendar invite (.ics) is attached to this email.",
       "",
       "If you need to reschedule, please do so through the booking portal at voltanyc.org/book using the same name and email you signed up for the original time slot with. If you have any trouble, reply to this email and we'll sort it out.",
+      "",
       "We look forward to speaking with you.",
       "",
       "Best,",
@@ -177,7 +178,7 @@ export async function sendInterviewBookingEmail(input: BookingEmailInput): Promi
         <a href="${googleCalendarUrl}">Add to Google Calendar</a><br/>
         A calendar invite (<code>.ics</code>) is attached to this email.
       </p>
-      <p>If you need to reschedule, please do so through the booking portal at voltanyc.org/book using the same name and email you signed up for the original time slot with. If you have any trouble, reply to this email and we'll sort it out.<br/>We look forward to speaking with you.</p>
+      <p>If you need to reschedule, please do so through the booking portal at voltanyc.org/book using the same name and email you signed up for the original time slot with. If you have any trouble, reply to this email and we'll sort it out.<br/><br/>We look forward to speaking with you.</p>
       <p>Best,<br/>Ethan Zhang</p>
     `,
     ics: {
@@ -210,6 +211,7 @@ export async function sendInterviewRescheduledEmail(input: BookingEmailInput & {
       "A fresh calendar invite (.ics) is attached.",
       "",
       "If you need to reschedule again, please do so through the booking portal at voltanyc.org/book using the same name and email you signed up for the original time slot with. If you have any trouble, reply to this email and we'll sort it out.",
+      "",
       "We look forward to speaking with you.",
       "",
       "Best,",
@@ -227,7 +229,7 @@ export async function sendInterviewRescheduledEmail(input: BookingEmailInput & {
         <a href="${googleCalendarUrl}">Open in Google Calendar</a><br/>
         A fresh calendar invite (<code>.ics</code>) is attached.
       </p>
-      <p>If you need to reschedule again, please do so through the booking portal at voltanyc.org/book using the same name and email you signed up for the original time slot with. If you have any trouble, reply to this email and we'll sort it out.<br/>We look forward to speaking with you.</p>
+      <p>If you need to reschedule again, please do so through the booking portal at voltanyc.org/book using the same name and email you signed up for the original time slot with. If you have any trouble, reply to this email and we'll sort it out.<br/><br/>We look forward to speaking with you.</p>
       <p>Best,<br/>Ethan Zhang</p>
     `,
     ics: {

@@ -15,7 +15,7 @@ import {
   type TeamMember,
   type InterviewSlot,
 } from "@/lib/members/storage";
-import { Btn, Field, Modal, AutocompleteInput, useConfirm } from "@/components/members/ui";
+import { Btn, Field, Modal, AutocompleteInput, AutocompleteTagInput, useConfirm } from "@/components/members/ui";
 import { DEFAULT_INTERVIEW_ZOOM_LINK } from "@/lib/interviews/config";
 
 const ET_TIMEZONE = "America/New_York";
@@ -169,13 +169,14 @@ function mapZoomSaveError(code: string): string {
   return "Could not save zoom link. Try again.";
 }
 
-function parseInterviewerNames(raw: string): string[] {
-  if (!raw.trim()) return [];
-  const parts = raw
-    .split(/[,\n]/g)
-    .map((part) => part.trim())
-    .filter(Boolean);
-  return Array.from(new Set(parts));
+function normalizeInterviewerNames(values: string[]): string[] {
+  return Array.from(
+    new Set(
+      (values ?? [])
+        .map((value) => value.trim())
+        .filter(Boolean)
+    )
+  );
 }
 
 function getSlotInterviewerNames(slot: InterviewSlot): string[] {
@@ -232,15 +233,16 @@ function InterviewsContent() {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [repeatWeekly, setRepeatWeekly] = useState(false);
   const [removeWeekly, setRemoveWeekly] = useState(false);
-  const [batchInterviewer, setBatchInterviewer] = useState("");
+  const [batchInterviewers, setBatchInterviewers] = useState<string[]>([]);
   const [bookedSlotDetails, setBookedSlotDetails] = useState<InterviewSlot | null>(null);
+  const [selectedInterviewers, setSelectedInterviewers] = useState<string[]>([]);
   const [applyingBatch, setApplyingBatch] = useState(false);
   const [manualStartDateInput, setManualStartDateInput] = useState(toDateString(new Date()));
   const [manualEndDateInput, setManualEndDateInput] = useState(toDateString(new Date()));
   const [manualStartTimeInput, setManualStartTimeInput] = useState("9:00 AM");
   const [manualEndTimeInput, setManualEndTimeInput] = useState("10:00 AM");
   const [manualRepeatWeekly, setManualRepeatWeekly] = useState(false);
-  const [manualInterviewer, setManualInterviewer] = useState("");
+  const [manualInterviewers, setManualInterviewers] = useState<string[]>([]);
   const [manualAddMessage, setManualAddMessage] = useState<string | null>(null);
   const [addingManualAvailability, setAddingManualAvailability] = useState(false);
   const dragSelectionRef = useRef<Record<string, DragCell>>({});
@@ -551,11 +553,11 @@ function InterviewsContent() {
     hour: number,
     minute: number,
     mode: DragMode,
-    interviewerInput?: string
+    interviewerNamesInput?: string[]
   ) => {
     const key = slotKey(dateISO, hour, minute);
     const slot = slotMap[key];
-    const interviewerNames = parseInterviewerNames(interviewerInput ?? "");
+    const interviewerNames = normalizeInterviewerNames(interviewerNamesInput ?? []);
     const legacyInterviewer = interviewerNames[0] ?? "";
 
     if (mode === "remove") {
@@ -701,7 +703,7 @@ function InterviewsContent() {
         if (slotTs < Date.now()) continue;
 
         // eslint-disable-next-line no-await-in-loop
-        await applySlotAction(cell.dateISO, cell.hour, cell.minute, "add", manualInterviewer);
+        await applySlotAction(cell.dateISO, cell.hour, cell.minute, "add", manualInterviewers);
         applied += 1;
       }
 
@@ -805,7 +807,8 @@ function InterviewsContent() {
     setShowBatchModal(false);
     setRepeatWeekly(false);
     setRemoveWeekly(false);
-    setBatchInterviewer("");
+    setBatchInterviewers([]);
+    setSelectedInterviewers([]);
     resetDragSelection();
   };
 
@@ -845,8 +848,34 @@ function InterviewsContent() {
           cell.hour,
           cell.minute,
           dragMode,
-          dragMode === "add" ? batchInterviewer : ""
+          dragMode === "add" ? batchInterviewers : []
         );
+      }
+    } finally {
+      setApplyingBatch(false);
+      closeBatchModal();
+    }
+  };
+
+  const saveSelectedInterviewers = async () => {
+    if (!canDeleteInterviews) return;
+    if (dragMode !== "remove") return;
+    const names = normalizeInterviewerNames(selectedInterviewers);
+    const legacy = names[0] ?? "";
+    setApplyingBatch(true);
+    try {
+      for (const cell of Object.values(dragSelection)) {
+        const key = slotKey(cell.dateISO, cell.hour, cell.minute);
+        const slot = slotMap[key];
+        if (!slot || !slot.available || slot.bookedBy) continue;
+        const current = getSlotInterviewerNames(slot);
+        const same = current.length === names.length && current.every((value, idx) => value === names[idx]);
+        if (same) continue;
+        // eslint-disable-next-line no-await-in-loop
+        await updateInterviewSlot(slot.id, {
+          interviewerNames: names,
+          interviewerName: legacy,
+        });
       }
     } finally {
       setApplyingBatch(false);
@@ -862,7 +891,18 @@ function InterviewsContent() {
       if (selectionCount >= 1 && dragModeRef.current) {
         setRepeatWeekly(false);
         setRemoveWeekly(false);
-        if (dragModeRef.current === "add") setBatchInterviewer("");
+        if (dragModeRef.current === "add") {
+          setBatchInterviewers([]);
+        } else {
+          const entries = Object.values(dragSelectionRef.current);
+          if (entries.length === 1) {
+            const cell = entries[0];
+            const slot = slotMap[slotKey(cell.dateISO, cell.hour, cell.minute)];
+            setSelectedInterviewers(slot ? getSlotInterviewerNames(slot) : []);
+          } else {
+            setSelectedInterviewers([]);
+          }
+        }
         setShowBatchModal(true);
         setDragMode(dragModeRef.current);
         return;
@@ -871,7 +911,7 @@ function InterviewsContent() {
     };
     window.addEventListener("pointerup", handlePointerUp);
     return () => window.removeEventListener("pointerup", handlePointerUp);
-  }, [draggingSelection]);
+  }, [draggingSelection, slotMap]);
 
   const onJumpDateChange = (nextDate: string) => {
     setJumpToDate(nextDate);
@@ -1126,12 +1166,13 @@ function InterviewsContent() {
                 placeholder="e.g. 10:00 AM"
               />
             </Field>
-              <Field label="Interviewer Name">
-                <AutocompleteInput
-                  value={manualInterviewer}
-                  onChange={setManualInterviewer}
+              <Field label="Interviewer(s)">
+                <AutocompleteTagInput
+                  values={manualInterviewers}
+                  onChange={setManualInterviewers}
                   options={interviewerOptions}
-                  placeholder="One or more names (comma-separated, optional)"
+                  commitOnBlur
+                  placeholder="Type a name, then Enter/comma"
                 />
               </Field>
             <Btn
@@ -1356,45 +1397,62 @@ function InterviewsContent() {
                 />
                 Repeat weekly (same slots for future weeks)
               </label>
-              <Field label="Interviewer Name">
-                <AutocompleteInput
-                  value={batchInterviewer}
-                  onChange={(value) => setBatchInterviewer(value)}
+              <Field label="Interviewer(s)">
+                <AutocompleteTagInput
+                  values={batchInterviewers}
+                  onChange={setBatchInterviewers}
                   options={interviewerOptions}
-                  placeholder="One or more names (comma-separated, optional)"
+                  commitOnBlur
+                  placeholder="Type a name, then Enter/comma"
                 />
               </Field>
             </>
           ) : (
-            <div className="space-y-2">
-              <p className="text-sm text-white/65 font-body">How should this removal apply?</p>
-              <label className="flex items-center gap-2 text-sm text-white/70 font-body cursor-pointer">
-                <input
-                  type="radio"
-                  name="remove-scope"
-                  checked={!removeWeekly}
-                  onChange={() => setRemoveWeekly(false)}
-                  className="accent-[#85CC17] w-4 h-4"
+            <>
+              <Field label="Interviewer(s)">
+                <AutocompleteTagInput
+                  values={selectedInterviewers}
+                  onChange={setSelectedInterviewers}
+                  options={interviewerOptions}
+                  commitOnBlur
+                  placeholder="Type a name, then Enter/comma"
                 />
-                Remove this availability only
-              </label>
-              <label className="flex items-center gap-2 text-sm text-white/70 font-body cursor-pointer">
-                <input
-                  type="radio"
-                  name="remove-scope"
-                  checked={removeWeekly}
-                  onChange={() => setRemoveWeekly(true)}
-                  className="accent-[#85CC17] w-4 h-4"
-                />
-                Remove all weekly availability for this time
-              </label>
-            </div>
+              </Field>
+              <div className="space-y-2">
+                <p className="text-sm text-white/65 font-body">How should this removal apply?</p>
+                <label className="flex items-center gap-2 text-sm text-white/70 font-body cursor-pointer">
+                  <input
+                    type="radio"
+                    name="remove-scope"
+                    checked={!removeWeekly}
+                    onChange={() => setRemoveWeekly(false)}
+                    className="accent-[#85CC17] w-4 h-4"
+                  />
+                  Remove this availability only
+                </label>
+                <label className="flex items-center gap-2 text-sm text-white/70 font-body cursor-pointer">
+                  <input
+                    type="radio"
+                    name="remove-scope"
+                    checked={removeWeekly}
+                    onChange={() => setRemoveWeekly(true)}
+                    className="accent-[#85CC17] w-4 h-4"
+                  />
+                  Remove all weekly availability for this time
+                </label>
+              </div>
+            </>
           )}
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <Btn variant="ghost" onClick={closeBatchModal} disabled={applyingBatch}>
             Cancel
           </Btn>
+          {dragMode === "remove" && canDeleteInterviews && (
+            <Btn variant="secondary" onClick={saveSelectedInterviewers} disabled={applyingBatch}>
+              {applyingBatch ? "Saving..." : "Save Interviewers"}
+            </Btn>
+          )}
           <Btn
             variant={dragMode === "remove" ? "danger" : "primary"}
             onClick={applyBatchSelection}

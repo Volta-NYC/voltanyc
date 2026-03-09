@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import MembersLayout from "@/components/members/MembersLayout";
 import {
   PageHeader, SearchBar, Badge, Btn, Modal, Field, Input, Select, TextArea,
-  Table, Empty, StatCard, TagInput, AutocompleteInput, useConfirm,
+  Table, Empty, StatCard, AutocompleteInput, AutocompleteTagInput, useConfirm,
 } from "@/components/members/ui";
 import {
   subscribeGrants, createGrant, updateGrant, deleteGrant, type Grant,
@@ -241,7 +241,13 @@ export default function GrantsPage() {
           </div>
           <div className="col-span-2">
             <Field label="Neighborhood Focus">
-              <TagInput values={form.neighborhoodFocus} onChange={v => setField("neighborhoodFocus", v)} options={NEIGHBORHOODS} />
+              <AutocompleteTagInput
+                values={form.neighborhoodFocus}
+                onChange={v => setField("neighborhoodFocus", v)}
+                options={NEIGHBORHOODS}
+                commitOnBlur
+                placeholder="Type a neighborhood, then Enter/comma"
+              />
             </Field>
           </div>
           <div className="col-span-2">

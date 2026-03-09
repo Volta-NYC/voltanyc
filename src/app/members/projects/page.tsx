@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import MembersLayout from "@/components/members/MembersLayout";
 import {
   PageHeader, SearchBar, Badge, Btn, Modal, Field, Input, Select, TextArea,
-  Empty, StatCard, TagInput, AutocompleteInput, AutocompleteTagInput, useConfirm,
+  Empty, StatCard, AutocompleteInput, AutocompleteTagInput, useConfirm,
 } from "@/components/members/ui";
 import {
   subscribeBusinesses, subscribeTeam, createBusiness, updateBusiness, deleteBusiness, type Business, type TeamMember,
@@ -397,12 +397,24 @@ export default function BusinessesPage() {
           </div>
           <div className="col-span-2">
             <Field label="Active Services">
-              <TagInput values={form.activeServices} onChange={v => setField("activeServices", v)} options={SERVICES} />
+              <AutocompleteTagInput
+                values={form.activeServices}
+                onChange={v => setField("activeServices", v)}
+                options={SERVICES}
+                commitOnBlur
+                placeholder="Type a service, then Enter/comma"
+              />
             </Field>
           </div>
           <div className="col-span-2">
             <Field label="Languages Spoken">
-              <TagInput values={form.languages} onChange={v => setField("languages", v)} options={LANGUAGES} />
+              <AutocompleteTagInput
+                values={form.languages}
+                onChange={v => setField("languages", v)}
+                options={LANGUAGES}
+                commitOnBlur
+                placeholder="Type a language, then Enter/comma"
+              />
             </Field>
           </div>
 

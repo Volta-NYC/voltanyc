@@ -210,7 +210,7 @@ export default function BIDTrackerPage() {
       </div>
 
       {/* BID cards with inline timeline */}
-      <div className="space-y-4">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         {sorted.map((bid) => {
           const timeline = getTimeline(bid);
           const draft = getTimelineDraft(bid.id);
@@ -317,13 +317,15 @@ export default function BIDTrackerPage() {
             </div>
           );
         })}
+        {filtered.length === 0 && (
+          <div className="sm:col-span-2 lg:col-span-3">
+            <Empty
+              message="No BIDs match your filters."
+              action={canEdit ? <Btn variant="primary" onClick={openCreate}>Add first BID</Btn> : undefined}
+            />
+          </div>
+        )}
       </div>
-      {filtered.length === 0 && (
-        <Empty
-          message="No BIDs match your filters."
-          action={canEdit ? <Btn variant="primary" onClick={openCreate}>Add first BID</Btn> : undefined}
-        />
-      )}
 
       {/* Create / Edit modal */}
       <Modal open={modal !== null} onClose={() => setModal(null)} title={modal === "create" ? "New BID" : "Edit BID"}>
