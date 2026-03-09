@@ -23,6 +23,7 @@ const ET_TIMEZONE = "America/New_York";
 function formatDateTime(isoString: string): string {
   const d = new Date(isoString);
   return d.toLocaleString("en-US", {
+    weekday: "short",
     month: "short",
     day: "numeric",
     year: "numeric",

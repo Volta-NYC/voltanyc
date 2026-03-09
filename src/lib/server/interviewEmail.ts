@@ -209,7 +209,11 @@ export async function sendInterviewRescheduledEmail(input: BookingEmailInput & {
       `Google Calendar: ${googleCalendarUrl}`,
       "A fresh calendar invite (.ics) is attached.",
       "",
-      "- Volta NYC",
+      "If you need to reschedule again, please do so through the booking portal at voltanyc.org/book using the same name and email you signed up for the original time slot with. If you have any trouble, reply to this email and we'll sort it out.",
+      "We look forward to speaking with you.",
+      "",
+      "Best,",
+      "Ethan Zhang",
     ].join("\n"),
     html: `
       <p>Hi ${input.bookerName || "there"},</p>
@@ -223,7 +227,8 @@ export async function sendInterviewRescheduledEmail(input: BookingEmailInput & {
         <a href="${googleCalendarUrl}">Open in Google Calendar</a><br/>
         A fresh calendar invite (<code>.ics</code>) is attached.
       </p>
-      <p>- Volta NYC</p>
+      <p>If you need to reschedule again, please do so through the booking portal at voltanyc.org/book using the same name and email you signed up for the original time slot with. If you have any trouble, reply to this email and we'll sort it out.<br/>We look forward to speaking with you.</p>
+      <p>Best,<br/>Ethan Zhang</p>
     `,
     ics: {
       filename: "volta-nyc-interview-rescheduled.ics",
