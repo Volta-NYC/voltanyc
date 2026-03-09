@@ -1145,8 +1145,6 @@ function InterviewsContent() {
               />
             </div>
           </div>
-          <p className="text-white/30 text-xs font-body">Planning window: up to 3 years ahead.</p>
-
           <div className="bg-[#1C1F26] border border-white/8 rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <div className="min-w-[1180px]">
