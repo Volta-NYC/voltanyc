@@ -201,15 +201,10 @@ function getSlotInterviewerNames(slot: InterviewSlot, memberNameById: Record<str
   const ids = Array.isArray(slot.interviewerMemberIds)
     ? slot.interviewerMemberIds.map((value) => String(value ?? "").trim()).filter(Boolean)
     : [];
-  if (ids.length > 0) {
-    return ids
-      .map((id) => memberNameById[id] || "")
-      .map((name) => name.trim())
-      .filter(Boolean);
-  }
-  return Array.isArray(slot.interviewerNames)
-    ? slot.interviewerNames.map((name) => String(name ?? "").trim()).filter(Boolean)
-    : [];
+  return ids
+    .map((id) => memberNameById[id] || "")
+    .map((name) => name.trim())
+    .filter(Boolean);
 }
 
 function weekOffsetFromDate(date: Date, referenceDate: Date): number {
@@ -374,7 +369,6 @@ function InterviewsContent() {
             durationMinutes: template.durationMinutes || 15,
             available: true,
             interviewerMemberIds: normalizeInterviewerMemberIds(template.interviewerMemberIds ?? []),
-            interviewerNames: interviewerNamesFromIds(template.interviewerMemberIds ?? []),
             recurringWeekly: true,
             recurringSeriesId: template.recurringSeriesId,
             location: template.location ?? "",
@@ -552,26 +546,12 @@ function InterviewsContent() {
         .filter(Boolean)
     );
 
-  const interviewerNamesFromIds = (ids: string[]): string[] =>
-    normalizeInterviewerMemberIds(ids)
-      .map((id) => memberNameById[id] ?? "")
-      .map((name) => name.trim())
-      .filter(Boolean);
-
   const interviewerDisplaysFromSlot = (slot: InterviewSlot): string[] => {
     const ids = Array.isArray(slot.interviewerMemberIds)
       ? slot.interviewerMemberIds.map((value) => String(value ?? "").trim()).filter(Boolean)
       : [];
-    const byIds = ids
+    return ids
       .map((id) => interviewerDisplayOptions.find((option) => option.id === id)?.display ?? "")
-      .filter(Boolean);
-    if (byIds.length > 0) return byIds;
-
-    const legacyNames = Array.isArray(slot.interviewerNames)
-      ? slot.interviewerNames.map((value) => String(value ?? "").trim()).filter(Boolean)
-      : [];
-    return legacyNames
-      .map((name) => interviewerDisplayOptions.find((option) => option.display === name || option.display.startsWith(`${name} <`))?.display ?? "")
       .filter(Boolean);
   };
 
@@ -781,8 +761,7 @@ function InterviewsContent() {
     if (!canDeleteInterviews) return;
     if (!slot.available || !!slot.bookedBy) return;
     const slotInterviewerIds = normalizeInterviewerMemberIds(slot.interviewerMemberIds ?? []);
-    const slotInterviewers = interviewerNamesFromIds(slotInterviewerIds);
-    if (slotInterviewerIds.length === 0 || slotInterviewers.length === 0) {
+    if (slotInterviewerIds.length === 0) {
       setAvailableMessage("At least one interviewer is required.");
       setTimeout(() => setAvailableMessage(null), 2200);
       return;
@@ -807,7 +786,6 @@ function InterviewsContent() {
             durationMinutes: slot.durationMinutes || 15,
             available: true,
             interviewerMemberIds: slotInterviewerIds,
-            interviewerNames: slotInterviewers,
             recurringWeekly: true,
             recurringSeriesId: seriesId,
             location: slot.location ?? "",
@@ -837,8 +815,7 @@ function InterviewsContent() {
   const saveAvailableInterviewerEdit = async () => {
     if (!editingAvailableSlot || !canDeleteInterviews) return;
     const ids = interviewerIdsFromDisplays(editingAvailableInterviewers);
-    const names = interviewerNamesFromIds(ids);
-    if (ids.length === 0 || names.length === 0) {
+    if (ids.length === 0) {
       setAvailableMessage("At least one interviewer is required.");
       setTimeout(() => setAvailableMessage(null), 2200);
       return;
@@ -857,14 +834,12 @@ function InterviewsContent() {
           // eslint-disable-next-line no-await-in-loop
           await updateInterviewSlot(target.id, {
             interviewerMemberIds: ids,
-            interviewerNames: names,
           });
         }
         setAvailableMessage(`Updated interviewer(s) on ${targets.length} weekly slot(s).`);
       } else {
         await updateInterviewSlot(editingAvailableSlot.id, {
           interviewerMemberIds: ids,
-          interviewerNames: names,
         });
         setAvailableMessage("Updated interviewer(s).");
       }
@@ -886,7 +861,6 @@ function InterviewsContent() {
     const key = slotKey(dateISO, hour, minute);
     const slot = slotMap[key];
     const interviewerIds = interviewerIdsFromDisplays(interviewerSelectionsInput ?? []);
-    const interviewerNames = interviewerNamesFromIds(interviewerIds);
 
     if (mode === "remove") {
       if (!canDeleteInterviews || !slot || !slot.available || slot.bookedBy) return;
@@ -898,7 +872,7 @@ function InterviewsContent() {
       if (slot.bookedBy) return;
       const patch: Partial<InterviewSlot> = {};
       if (!slot.available) {
-        if (interviewerIds.length === 0 || interviewerNames.length === 0) return;
+        if (interviewerIds.length === 0) return;
         patch.available = true;
       }
       const currentIds = normalizeInterviewerMemberIds(slot.interviewerMemberIds ?? []);
@@ -908,7 +882,6 @@ function InterviewsContent() {
           && currentIds.every((value, idx) => value === interviewerIds[idx]);
         if (!same) {
           patch.interviewerMemberIds = interviewerIds;
-          patch.interviewerNames = interviewerNames;
         }
       }
       if (recurring?.enabled) {
@@ -921,14 +894,13 @@ function InterviewsContent() {
       return;
     }
 
-    if (interviewerIds.length === 0 || interviewerNames.length === 0) return;
+    if (interviewerIds.length === 0) return;
     await createInterviewSlot({
       datetime: `${key}:00`,
       durationMinutes: 15,
       available: true,
       location: "",
       interviewerMemberIds: interviewerIds,
-      interviewerNames,
       recurringWeekly: !!recurring?.enabled,
       recurringSeriesId: recurring?.enabled ? (recurring.seriesId || buildRecurringSeriesId()) : undefined,
       createdBy: user?.uid ?? "",
@@ -1229,8 +1201,7 @@ function InterviewsContent() {
     if (!canDeleteInterviews) return;
     if (dragMode !== "remove") return;
     const ids = interviewerIdsFromDisplays(selectedInterviewers);
-    const names = interviewerNamesFromIds(ids);
-    if (ids.length === 0 || names.length === 0) {
+    if (ids.length === 0) {
       setAvailableMessage("At least one interviewer is required.");
       setTimeout(() => setAvailableMessage(null), 2200);
       return;
@@ -1269,7 +1240,6 @@ function InterviewsContent() {
         // eslint-disable-next-line no-await-in-loop
         await updateInterviewSlot(slot.id, {
           interviewerMemberIds: ids,
-          interviewerNames: names,
         });
       }
     } finally {
