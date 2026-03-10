@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect } from "react";
 import MembersLayout from "@/components/members/MembersLayout";
 import {
-  PageHeader, SearchBar, Btn, Modal, Field, Input, Table, Empty, useConfirm,
+  PageHeader, SearchBar, Btn, Modal, Field, Input, Empty, useConfirm,
 } from "@/components/members/ui";
 import {
   subscribeTeam, createTeamMember, updateTeamMember, deleteTeamMember, type TeamMember,
@@ -169,7 +169,15 @@ export default function TeamPage() {
   const [sortDir, setSortDir]         = useState<"asc" | "desc">("asc");
   const [importingCsv, setImportingCsv] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [draggingSelect, setDraggingSelect] = useState(false);
+  const [selectionRect, setSelectionRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  const [copiedEmails, setCopiedEmails] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const tableWrapRef = useRef<HTMLDivElement | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const dragPointerIdRef = useRef<number | null>(null);
+  const rowRefMap = useRef<Record<string, HTMLTableRowElement | null>>({});
 
   const { ask, Dialog } = useConfirm();
   const { authRole }    = useAuth();
@@ -445,6 +453,104 @@ export default function TeamPage() {
     return sortDir === "asc" ? cmp : -cmp;
   });
 
+  const selectedEmailList = (() => {
+    const selectedSet = new Set(selectedMemberIds);
+    const deduped: string[] = [];
+    const seen = new Set<string>();
+    sorted.forEach((member) => {
+      if (!selectedSet.has(member.id)) return;
+      const emails = [member.email, member.alternateEmail ?? ""];
+      emails
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .forEach((email) => {
+          const key = email.toLowerCase();
+          if (seen.has(key)) return;
+          seen.add(key);
+          deduped.push(email);
+        });
+    });
+    return deduped;
+  })();
+
+  const copySelectedEmails = async () => {
+    if (selectedEmailList.length === 0) return;
+    await navigator.clipboard.writeText(selectedEmailList.join(", "));
+    setCopiedEmails(true);
+    setTimeout(() => setCopiedEmails(false), 1600);
+  };
+
+  const clearSelection = () => {
+    setSelectedMemberIds([]);
+    setSelectionRect(null);
+    setDraggingSelect(false);
+  };
+
+  const handleTablePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("button, a, input, textarea, select, label")) return;
+    const container = tableWrapRef.current;
+    if (!container) return;
+    const bounds = container.getBoundingClientRect();
+    dragStartRef.current = {
+      x: e.clientX - bounds.left,
+      y: e.clientY - bounds.top + container.scrollTop,
+    };
+    dragPointerIdRef.current = e.pointerId;
+    setDraggingSelect(true);
+    setSelectionRect({ left: dragStartRef.current.x, top: dragStartRef.current.y, width: 0, height: 0 });
+    setSelectedMemberIds([]);
+    container.setPointerCapture(e.pointerId);
+  };
+
+  const handleTablePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingSelect || dragPointerIdRef.current !== e.pointerId) return;
+    const start = dragStartRef.current;
+    const container = tableWrapRef.current;
+    if (!start || !container) return;
+
+    const bounds = container.getBoundingClientRect();
+    const currentX = e.clientX - bounds.left;
+    const currentY = e.clientY - bounds.top + container.scrollTop;
+    const left = Math.min(start.x, currentX);
+    const top = Math.min(start.y, currentY);
+    const right = Math.max(start.x, currentX);
+    const bottom = Math.max(start.y, currentY);
+    const width = right - left;
+    const height = bottom - top;
+    setSelectionRect({ left, top, width, height });
+
+    const containerTopInPage = bounds.top - container.scrollTop;
+    const selectTopPage = containerTopInPage + top;
+    const selectBottomPage = containerTopInPage + bottom;
+    const selectLeftPage = bounds.left + left;
+    const selectRightPage = bounds.left + right;
+
+    const nextSelected: string[] = [];
+    sorted.forEach((member) => {
+      const rowEl = rowRefMap.current[member.id];
+      if (!rowEl) return;
+      const rowRect = rowEl.getBoundingClientRect();
+      const intersects =
+        rowRect.left < selectRightPage
+        && rowRect.right > selectLeftPage
+        && rowRect.top < selectBottomPage
+        && rowRect.bottom > selectTopPage;
+      if (intersects) nextSelected.push(member.id);
+    });
+    setSelectedMemberIds(nextSelected);
+  };
+
+  const handleTablePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingSelect || dragPointerIdRef.current !== e.pointerId) return;
+    const container = tableWrapRef.current;
+    if (container) container.releasePointerCapture(e.pointerId);
+    dragStartRef.current = null;
+    dragPointerIdRef.current = null;
+    setDraggingSelect(false);
+  };
+
   const setTrack = (track: TrackKey) => {
     if (track === "—") {
       setField("divisions", []);
@@ -485,39 +591,107 @@ export default function TeamPage() {
       {/* Search controls */}
       <div className="flex gap-3 mb-4 flex-wrap">
         <SearchBar value={search} onChange={setSearch} placeholder="Search by name, email, school, or grade…" />
+        <Btn
+          variant="secondary"
+          onClick={copySelectedEmails}
+          disabled={selectedEmailList.length === 0}
+        >
+          {copiedEmails ? "Copied" : `Copy selected emails${selectedEmailList.length > 0 ? ` (${selectedEmailList.length})` : ""}`}
+        </Btn>
+        {selectedMemberIds.length > 0 && (
+          <Btn variant="ghost" onClick={clearSelection}>Clear Selection</Btn>
+        )}
       </div>
 
       {/* Team member list */}
-      <Table
-        cols={["Track", "Name", "Email", "School", "Grade", "Actions"]}
-        sortCol={sortCol} sortDir={sortDir} onSort={handleSort} sortableCols={[0,1,2,3,4]}
-        rows={sorted.map(member => {
-          const track = getMemberTrack(member);
-          const avatar = getTrackAvatarStyles(track);
-          return [
-            <span key="track" className="text-white/65 text-xs font-semibold">{track}</span>,
-            <div key="name" className="flex items-center gap-2.5">
-              {/* Avatar with first initial */}
-              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatar.bg }}>
-                <span className="text-sm font-bold" style={{ color: avatar.text }}>{member.name[0]?.toUpperCase()}</span>
-              </div>
-              <span className="text-white font-medium">{member.name}</span>
-            </div>,
-            <div key="email" className="text-xs font-mono">
-              <p className="text-white/50">{member.email || "—"}</p>
-              {member.alternateEmail && (
-                <p className="text-white/30">{member.alternateEmail}</p>
-              )}
-            </div>,
-            <span key="school" className="text-white/50">{member.school || "—"}</span>,
-            <span key="grade" className="text-white/50">{member.grade || "—"}</span>,
-            <div key="actions" className="flex gap-2">
-              {canEdit && <Btn size="sm" variant="secondary" onClick={() => openEdit(member)}>Edit</Btn>}
-              {canEdit && <Btn size="sm" variant="danger" onClick={() => ask(async () => deleteTeamMember(member.id))}>Delete</Btn>}
-            </div>,
-          ];
-        })}
-      />
+      <div
+        ref={tableWrapRef}
+        className="relative bg-[#1C1F26] border border-white/8 rounded-xl overflow-x-auto select-none"
+        onPointerDown={handleTablePointerDown}
+        onPointerMove={handleTablePointerMove}
+        onPointerUp={handleTablePointerUp}
+        onPointerCancel={handleTablePointerUp}
+      >
+        {selectionRect && (
+          <div
+            className="absolute z-20 border border-[#85CC17]/70 bg-[#85CC17]/20 pointer-events-none"
+            style={{
+              left: selectionRect.left,
+              top: selectionRect.top,
+              width: selectionRect.width,
+              height: selectionRect.height,
+            }}
+          />
+        )}
+        <table className="w-full min-w-[760px]">
+          <thead className="bg-[#0F1014] border-b border-white/8">
+            <tr>
+              {["Track", "Name", "Email", "School", "Grade", "Actions"].map((col, idx) => {
+                const sortable = [0, 1, 2, 3, 4].includes(idx);
+                const active = sortCol === idx;
+                return (
+                  <th
+                    key={col}
+                    className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/45 ${sortable ? "cursor-pointer select-none" : ""}`}
+                    onClick={() => sortable && handleSort(idx)}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {col}
+                      {active && <span className="text-white/35">{sortDir === "asc" ? "↑" : "↓"}</span>}
+                    </span>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {sorted.map((member) => {
+              const track = getMemberTrack(member);
+              const avatar = getTrackAvatarStyles(track);
+              const selected = selectedMemberIds.includes(member.id);
+              return (
+                <tr
+                  key={member.id}
+                  ref={(el) => { rowRefMap.current[member.id] = el; }}
+                  className={`${selected ? "bg-[#85CC17]/12" : "hover:bg-white/3"} transition-colors`}
+                >
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className="text-white/65 text-xs font-semibold">{track}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatar.bg }}>
+                        <span className="text-sm font-bold" style={{ color: avatar.text }}>{member.name[0]?.toUpperCase()}</span>
+                      </div>
+                      <span className="text-white font-medium">{member.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className="text-xs font-mono">
+                      <p className="text-white/50">{member.email || "—"}</p>
+                      {member.alternateEmail && (
+                        <p className="text-white/30">{member.alternateEmail}</p>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className="text-white/50">{member.school || "—"}</span>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className="text-white/50">{member.grade || "—"}</span>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className="flex gap-2">
+                      {canEdit && <Btn size="sm" variant="secondary" onClick={() => openEdit(member)}>Edit</Btn>}
+                      {canEdit && <Btn size="sm" variant="danger" onClick={() => ask(async () => deleteTeamMember(member.id))}>Delete</Btn>}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       {filtered.length === 0 && (
         <Empty
           message="No team members."
