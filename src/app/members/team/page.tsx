@@ -627,7 +627,7 @@ export default function TeamPage() {
       {/* Team member list */}
       <div
         ref={tableWrapRef}
-        className="relative bg-[#1C1F26] border border-white/8 rounded-xl overflow-x-auto select-none"
+        className={`relative bg-[#1C1F26] border border-white/8 rounded-xl overflow-x-auto ${emailSelectMode ? "select-none" : "select-text"}`}
         onPointerDown={handleTablePointerDown}
         onPointerMove={handleTablePointerMove}
         onPointerUp={handleTablePointerUp}
