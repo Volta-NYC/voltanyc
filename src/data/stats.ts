@@ -4,7 +4,7 @@ export interface VoltaStat {
 }
 
 export const VOLTA_STATS = {
-  businessesServed: { value: 20, suffix: "+" } satisfies VoltaStat,
+  businessesServed: { value: 30, suffix: "+" } satisfies VoltaStat,
   nycNeighborhoods: { value: 9, suffix: "" } satisfies VoltaStat,
   studentMembers: { value: 100, suffix: "+" } satisfies VoltaStat,
   serviceTracks: { value: 3, suffix: "" } satisfies VoltaStat,
@@ -16,4 +16,3 @@ export const VOLTA_STATS = {
 export function formatStat(stat: VoltaStat): string {
   return `${stat.value}${stat.suffix}`;
 }
-
