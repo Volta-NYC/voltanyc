@@ -456,7 +456,7 @@ export default function ApplicantsPage() {
         const patch: Partial<ApplicationRecord> = {
           fullName: fullName || (existing?.fullName ?? ""),
           email: email || (existing?.email ?? ""),
-          source: "legacy_sheet_import",
+          source: "csv_import",
         };
         if (parsedSchool) patch.schoolName = parsedSchool;
         if (parsedGrade) patch.grade = parsedGrade;
@@ -500,7 +500,7 @@ export default function ApplicantsPage() {
             accomplishment: "",
             status: parsedStatusRaw ? coerceStatus(parsedStatusRaw) : "New",
             notes: parsedNotes,
-            source: "legacy_sheet_import",
+            source: "csv_import",
             sourceTimestampRaw: parsedTimestampRaw,
             interviewInviteSentAt: parsedInviteFlag === "true" || parsedInviteFlag === "yes" ? importedCreatedAt : "",
             createdAt: importedCreatedAt,
@@ -510,8 +510,9 @@ export default function ApplicantsPage() {
         }
       }
       setStatusMessage(`Import complete: ${added} added, ${updated} updated.`);
-    } catch {
-      setStatusMessage("Could not import CSV.");
+    } catch (err) {
+      const message = err instanceof Error && err.message ? err.message : "unknown_error";
+      setStatusMessage(`Could not import CSV (${message}).`);
     } finally {
       setImporting(false);
     }
