@@ -4,8 +4,11 @@ import AnimatedSection from "@/components/AnimatedSection";
 import CountUp from "@/components/CountUp";
 import HeroSection from "@/components/HeroSection";
 import { MapPinIcon } from "@/components/Icons";
-import { homeStats, currentProjects, joinTracks } from "@/data";
+import { homeStats, currentProjects as fallbackCurrentProjects, joinTracks } from "@/data";
 import { VOLTA_STATS, formatStat } from "@/data/stats";
+import { getPublicShowcaseCards } from "@/lib/server/publicShowcase";
+
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Volta NYC — Free Consulting for NYC Small Businesses",
@@ -17,7 +20,42 @@ export const metadata: Metadata = {
   },
 };
 
-export default function Home() {
+const SHOWCASE_COLOR_CLASS: Record<string, string> = {
+  green: "bg-v-green",
+  blue: "bg-v-blue",
+  orange: "bg-orange-400",
+  amber: "bg-amber-400",
+  pink: "bg-pink-400",
+  purple: "bg-purple-400",
+};
+
+export default async function Home() {
+  const publicShowcase = await getPublicShowcaseCards();
+  const publicHomeCards = publicShowcase
+    .filter((card) => card.featuredOnHome)
+    .slice(0, 3)
+    .map((card) => ({
+      name: card.name,
+      type: card.type,
+      neighborhood: card.neighborhood,
+      services: card.services,
+      colorClass: SHOWCASE_COLOR_CLASS[card.color] ?? "bg-v-green",
+      desc: card.desc,
+      url: card.url,
+    }));
+
+  const currentProjects = publicHomeCards.length > 0
+    ? publicHomeCards
+    : fallbackCurrentProjects.map((project) => ({
+      name: project.name,
+      type: project.type,
+      neighborhood: project.neighborhood,
+      services: project.services,
+      colorClass: project.color,
+      desc: project.desc,
+      url: project.url,
+    }));
+
   const getServiceTagClass = (service: string) => {
     const key = service.trim().toLowerCase();
     if (key.includes("website") || key.includes("seo") || key.includes("google")) {
@@ -182,7 +220,7 @@ export default function Home() {
             {currentProjects.map((p, i) => (
               <AnimatedSection key={p.name} delay={i * 0.1}>
                 <div className="border border-v-border rounded-2xl overflow-hidden project-card bg-v-bg">
-                  <div className={`${p.color} h-2`} />
+                  <div className={`${p.colorClass} h-2`} />
                   <div className="mx-6 mt-6 rounded-xl border border-v-border bg-white h-36 flex items-center justify-center">
                     <span className="font-body text-xs text-v-muted uppercase tracking-wider">Project photo coming soon</span>
                   </div>

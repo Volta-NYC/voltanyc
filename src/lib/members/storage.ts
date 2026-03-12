@@ -62,6 +62,18 @@ export interface Business {
   clientNotes?: string;       // legacy field
   sortIndex?: number;
   intakeSource?: "website_form";
+  // Public-site showcase configuration (optional, managed in Projects UI).
+  showcaseEnabled?: boolean;
+  showcaseFeaturedOnHome?: boolean;
+  showcaseOrder?: number;
+  showcaseName?: string;
+  showcaseType?: string;
+  showcaseNeighborhood?: string;
+  showcaseServices?: string[]; // may be undefined if Firebase omitted empty array
+  showcaseStatus?: "In Progress" | "Active" | "Upcoming";
+  showcaseDescription?: string;
+  showcaseUrl?: string;
+  showcaseColor?: "green" | "blue" | "orange" | "amber" | "pink" | "purple";
 }
 
 export interface Task {

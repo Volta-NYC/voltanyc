@@ -3,8 +3,11 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import AnimatedSection from "@/components/AnimatedSection";
 import { MapPinIcon } from "@/components/Icons";
-import { projects, joinTracks } from "@/data";
+import { projects as fallbackProjects, joinTracks } from "@/data";
 import { VOLTA_STATS, formatStat } from "@/data/stats";
+import { getPublicShowcaseCards } from "@/lib/server/publicShowcase";
+
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Our Work | Volta NYC",
@@ -14,6 +17,15 @@ export const metadata: Metadata = {
     title: "Our Work | Volta NYC",
     description: `${formatStat(VOLTA_STATS.businessesServed)} businesses across ${formatStat(VOLTA_STATS.nycNeighborhoods)} NYC neighborhoods. See every project.`,
   },
+};
+
+const SHOWCASE_COLOR_CLASS: Record<string, string> = {
+  green: "bg-v-green",
+  blue: "bg-v-blue",
+  orange: "bg-orange-400",
+  amber: "bg-amber-400",
+  pink: "bg-pink-400",
+  purple: "bg-purple-400",
 };
 
 const NeighborhoodMap = dynamic(() => import("@/components/NeighborhoodMap"), {
@@ -37,7 +49,32 @@ const neighborhoods = [
   { name: "Forest Avenue", borough: "Staten Island" },
 ];
 
-export default function Showcase() {
+export default async function Showcase() {
+  const publicShowcase = await getPublicShowcaseCards();
+  const projects = publicShowcase.length > 0
+    ? publicShowcase.map((card) => ({
+      name: card.name,
+      type: card.type,
+      neighborhood: card.neighborhood,
+      services: card.services,
+      status: card.status,
+      colorClass: SHOWCASE_COLOR_CLASS[card.color] ?? "bg-v-green",
+      desc: card.desc,
+      url: card.url,
+      quote: undefined as string | undefined,
+    }))
+    : fallbackProjects.map((project) => ({
+      name: project.name,
+      type: project.type,
+      neighborhood: project.neighborhood,
+      services: project.services,
+      status: project.status,
+      colorClass: project.color,
+      desc: project.desc,
+      url: project.url,
+      quote: project.quote,
+    }));
+
   const getServiceTagClass = (service: string) => {
     const key = service.trim().toLowerCase();
     if (key.includes("website") || key.includes("seo") || key.includes("google")) {
@@ -122,7 +159,7 @@ export default function Showcase() {
             {projects.map((p, i) => (
               <AnimatedSection key={p.name} delay={i * 0.07}>
                 <div className="bg-white border border-v-border rounded-2xl overflow-hidden project-card h-full flex flex-col">
-                  <div className={`${p.color} h-2`} />
+                  <div className={`${p.colorClass} h-2`} />
                   <div className="mx-7 mt-7 rounded-xl border border-v-border bg-v-bg h-40 flex items-center justify-center">
                     <span className="font-body text-xs text-v-muted uppercase tracking-wider">Project photo coming soon</span>
                   </div>

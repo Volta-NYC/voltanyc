@@ -68,6 +68,8 @@ async function upsertBusinessLeadFromContactForm(data: Record<string, unknown>):
     teamMembers: [],
     sortIndex: now,
     intakeSource: "website_form",
+    showcaseEnabled: false,
+    showcaseFeaturedOnHome: false,
     createdAt: timestamp,
     updatedAt: timestamp,
   });

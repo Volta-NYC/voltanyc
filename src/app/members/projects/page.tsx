@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import MembersLayout from "@/components/members/MembersLayout";
 import {
-  PageHeader, SearchBar, Badge, Btn, Modal, Field, Input, Select, TextArea,
+  PageHeader, SearchBar, Badge, Btn, Modal, Field, Input, Select, TextArea, AutocompleteTagInput,
   Empty, StatCard, AutocompleteInput, useConfirm,
 } from "@/components/members/ui";
 import {
@@ -15,6 +15,18 @@ import { useAuth } from "@/lib/members/authContext";
 
 const STATUSES  = ["Not Started", "Discovery", "Active", "On Hold", "Complete"];
 const DIVISIONS = ["Tech", "Marketing", "Finance"];
+const SHOWCASE_STATUSES = ["In Progress", "Active", "Upcoming"];
+const SHOWCASE_COLORS = ["green", "blue", "orange", "amber", "pink", "purple"];
+const SHOWCASE_SERVICE_OPTIONS = [
+  "Website",
+  "SEO",
+  "Google Visibility",
+  "Social Media",
+  "Brand Strategy",
+  "Grant Writing",
+  "Operations",
+  "Analytics",
+];
 const SORT_OPTIONS = [
   { value: "status", label: "Status" },
   { value: "name", label: "Name" },
@@ -52,6 +64,17 @@ const BLANK_FORM: Omit<Business, "id" | "createdAt" | "updatedAt"> = {
   notes: "",
   division: "Tech",
   teamMembers: [],
+  showcaseEnabled: false,
+  showcaseFeaturedOnHome: true,
+  showcaseOrder: 1000,
+  showcaseName: "",
+  showcaseType: "",
+  showcaseNeighborhood: "",
+  showcaseServices: [],
+  showcaseStatus: "In Progress",
+  showcaseDescription: "",
+  showcaseUrl: "",
+  showcaseColor: "green",
 };
 
 // ── PAGE COMPONENT ────────────────────────────────────────────────────────────
@@ -102,6 +125,17 @@ export default function BusinessesPage() {
       notes:          b.notes,
       division:       b.division        ?? "Tech",
       teamMembers:    b.teamMembers     ?? [],
+      showcaseEnabled: !!b.showcaseEnabled,
+      showcaseFeaturedOnHome: b.showcaseFeaturedOnHome ?? true,
+      showcaseOrder: b.showcaseOrder ?? 1000,
+      showcaseName: b.showcaseName ?? "",
+      showcaseType: b.showcaseType ?? "",
+      showcaseNeighborhood: b.showcaseNeighborhood ?? "",
+      showcaseServices: b.showcaseServices ?? [],
+      showcaseStatus: b.showcaseStatus ?? "In Progress",
+      showcaseDescription: b.showcaseDescription ?? "",
+      showcaseUrl: b.showcaseUrl ?? "",
+      showcaseColor: b.showcaseColor ?? "green",
     });
     setEditingBusiness(b);
     setShowOwnerAltEmail(!!(b.ownerAlternateEmail ?? "").trim());
@@ -129,6 +163,8 @@ export default function BusinessesPage() {
 
   const handleSave = async () => {
     if (!form.name.trim()) return;
+    const showcaseEnabled = !!form.showcaseEnabled;
+    const showcaseServices = (form.showcaseServices ?? []).map((service) => service.trim()).filter(Boolean);
     const payload: Partial<Business> = {
       name: form.name.trim(),
       ownerName: form.ownerName.trim(),
@@ -144,7 +180,23 @@ export default function BusinessesPage() {
       firstContactDate: form.firstContactDate,
       division: form.division ?? "Tech",
       notes: form.notes,
+      showcaseEnabled,
     };
+
+    if (showcaseEnabled) {
+      payload.showcaseFeaturedOnHome = !!form.showcaseFeaturedOnHome;
+      payload.showcaseOrder = Number(form.showcaseOrder ?? 1000);
+      payload.showcaseName = (form.showcaseName ?? "").trim();
+      payload.showcaseType = (form.showcaseType ?? "").trim();
+      payload.showcaseNeighborhood = (form.showcaseNeighborhood ?? "").trim();
+      payload.showcaseServices = showcaseServices;
+      payload.showcaseStatus = (form.showcaseStatus as Business["showcaseStatus"]) ?? "In Progress";
+      payload.showcaseDescription = (form.showcaseDescription ?? "").trim();
+      payload.showcaseUrl = (form.showcaseUrl ?? "").trim();
+      payload.showcaseColor = (form.showcaseColor as Business["showcaseColor"]) ?? "green";
+    } else {
+      payload.showcaseFeaturedOnHome = false;
+    }
 
     if (editingBusiness) {
       await updateBusiness(editingBusiness.id, {
@@ -155,6 +207,15 @@ export default function BusinessesPage() {
         githubUrl: null as unknown as string,
         driveFolderUrl: null as unknown as string,
         clientNotes: null as unknown as string,
+        showcaseOrder: showcaseEnabled ? payload.showcaseOrder : (null as unknown as number),
+        showcaseName: showcaseEnabled ? payload.showcaseName : (null as unknown as string),
+        showcaseType: showcaseEnabled ? payload.showcaseType : (null as unknown as string),
+        showcaseNeighborhood: showcaseEnabled ? payload.showcaseNeighborhood : (null as unknown as string),
+        showcaseServices: showcaseEnabled ? payload.showcaseServices : (null as unknown as string[]),
+        showcaseStatus: showcaseEnabled ? payload.showcaseStatus : (null as unknown as Business["showcaseStatus"]),
+        showcaseDescription: showcaseEnabled ? payload.showcaseDescription : (null as unknown as string),
+        showcaseUrl: showcaseEnabled ? payload.showcaseUrl : (null as unknown as string),
+        showcaseColor: showcaseEnabled ? payload.showcaseColor : (null as unknown as Business["showcaseColor"]),
       });
     } else {
       await createBusiness({
@@ -267,6 +328,9 @@ export default function BusinessesPage() {
             {b.intakeSource === "website_form" && (
               <span className="text-amber-300 ml-1" title="Submitted via website form">★</span>
             )}
+            {b.showcaseEnabled && (
+              <span className="text-blue-300 ml-1" title="Visible on public site">◆</span>
+            )}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -342,6 +406,8 @@ export default function BusinessesPage() {
       />
       <p className="text-xs text-white/45 mb-4">
         <span className="text-amber-300 font-semibold">★</span> Submitted via website business interest form.
+        <span className="mx-2">·</span>
+        <span className="text-blue-300 font-semibold">◆</span> Visible on public home/showcase.
       </p>
 
       {/* Stats */}
@@ -479,6 +545,82 @@ export default function BusinessesPage() {
               <TextArea rows={3} value={form.notes} onChange={e => setField("notes", e.target.value)} />
             </Field>
           </div>
+
+          {/* ── Public Showcase ── */}
+          <div className="col-span-2 mt-1">
+            <p className="text-white/30 text-xs uppercase tracking-wider font-body mb-1">Public Showcase</p>
+            <p className="text-white/45 text-xs font-body">Controls what appears on the public home/showcase cards.</p>
+          </div>
+          <div className="col-span-2">
+            <label className="inline-flex items-center gap-2 text-sm text-white/80 font-body">
+              <input
+                type="checkbox"
+                className="accent-[#85CC17] w-4 h-4"
+                checked={!!form.showcaseEnabled}
+                onChange={(e) => setField("showcaseEnabled", e.target.checked)}
+              />
+              Show this project on the public site
+            </label>
+          </div>
+
+          {form.showcaseEnabled && (
+            <>
+              <Field label="Card Name (optional)">
+                <Input value={form.showcaseName ?? ""} onChange={e => setField("showcaseName", e.target.value)} />
+              </Field>
+              <Field label="Card Type (optional)">
+                <Input value={form.showcaseType ?? ""} onChange={e => setField("showcaseType", e.target.value)} />
+              </Field>
+              <Field label="Neighborhood Label (optional)">
+                <Input value={form.showcaseNeighborhood ?? ""} onChange={e => setField("showcaseNeighborhood", e.target.value)} />
+              </Field>
+              <Field label="Card Status">
+                <Select options={SHOWCASE_STATUSES} value={form.showcaseStatus ?? "In Progress"} onChange={e => setField("showcaseStatus", e.target.value)} />
+              </Field>
+              <Field label="Accent Color">
+                <Select options={SHOWCASE_COLORS} value={form.showcaseColor ?? "green"} onChange={e => setField("showcaseColor", e.target.value)} />
+              </Field>
+              <Field label="Sort Order">
+                <Input
+                  type="number"
+                  value={String(form.showcaseOrder ?? 1000)}
+                  onChange={e => setField("showcaseOrder", Number(e.target.value || 1000))}
+                />
+              </Field>
+              <div className="col-span-2">
+                <Field label="Services">
+                  <AutocompleteTagInput
+                    values={form.showcaseServices ?? []}
+                    onChange={(values) => setField("showcaseServices", values)}
+                    options={SHOWCASE_SERVICE_OPTIONS}
+                    placeholder="Type service name, then Enter/comma"
+                    commitOnBlur
+                  />
+                </Field>
+              </div>
+              <div className="col-span-2">
+                <Field label="Card Description">
+                  <TextArea rows={3} value={form.showcaseDescription ?? ""} onChange={e => setField("showcaseDescription", e.target.value)} />
+                </Field>
+              </div>
+              <div className="col-span-2">
+                <Field label="Public Link (optional)">
+                  <Input value={form.showcaseUrl ?? ""} onChange={e => setField("showcaseUrl", e.target.value)} placeholder="https://" />
+                </Field>
+              </div>
+              <div className="col-span-2">
+                <label className="inline-flex items-center gap-2 text-sm text-white/80 font-body">
+                  <input
+                    type="checkbox"
+                    className="accent-[#85CC17] w-4 h-4"
+                    checked={!!form.showcaseFeaturedOnHome}
+                    onChange={(e) => setField("showcaseFeaturedOnHome", e.target.checked)}
+                  />
+                  Feature this card on the homepage
+                </label>
+              </div>
+            </>
+          )}
 
           {/* ── Business Info ── */}
           <div className="col-span-2">
