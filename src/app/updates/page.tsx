@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Script from "next/script";
 import AnimatedSection from "@/components/AnimatedSection";
 import { progressUpdates } from "@/data/publishing";
 
@@ -19,10 +18,19 @@ function prettyDate(value: string): string {
   });
 }
 
+function toLinkedInEmbedUrl(entry: { linkedinUrl?: string; linkedinUrn?: string }): string | null {
+  if (entry.linkedinUrl && entry.linkedinUrl.includes("/feed/update/")) {
+    return entry.linkedinUrl.replace("://www.linkedin.com/feed/update/", "://www.linkedin.com/embed/feed/update/");
+  }
+  if (entry.linkedinUrn) {
+    return `https://www.linkedin.com/embed/feed/update/${entry.linkedinUrn}`;
+  }
+  return null;
+}
+
 export default function ProgressUpdatesPage() {
   return (
     <>
-      <Script src="https://platform.linkedin.com/in.js" strategy="afterInteractive" />
       <section className="bg-v-bg pt-32 pb-16 border-b border-v-border">
         <div className="max-w-5xl mx-auto px-5 md:px-8">
           <AnimatedSection>
@@ -44,48 +52,52 @@ export default function ProgressUpdatesPage() {
       <section className="py-14 bg-white">
         <div className="max-w-5xl mx-auto px-5 md:px-8">
           <div className="space-y-6">
-            {progressUpdates.map((entry, idx) => (
-              <AnimatedSection key={entry.id} delay={idx * 0.06}>
-                <article className="bg-v-bg border border-v-border rounded-2xl p-6 md:p-7">
-                  <p className="font-body text-xs text-v-muted mb-2">{prettyDate(entry.date)}</p>
-                  <h2 className="font-display font-bold text-v-ink text-2xl mb-3">{entry.title}</h2>
-                  <p className="font-body text-v-muted mb-4">{entry.summary}</p>
-                  <ul className="space-y-1.5">
-                    {entry.highlights.map((item) => (
-                      <li key={item} className="font-body text-sm text-v-ink flex items-start gap-2">
-                        <span className="text-v-green mt-0.5">•</span>
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                  {entry.linkedinUrn && (
-                    <div className="mt-4">
-                      <blockquote
-                        className="linkedin-post"
-                        data-id={entry.linkedinUrn}
-                        data-theme="light"
-                        data-size="large"
-                      />
-                    </div>
-                  )}
-                  {entry.links && entry.links.length > 0 && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {entry.links.map((link) => (
-                        <a
-                          key={link.href}
-                          href={link.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs font-body px-3 py-1.5 rounded-full border border-v-border text-v-muted hover:text-v-ink hover:border-v-ink transition-colors"
-                        >
-                          {link.label}
-                        </a>
+            {progressUpdates.map((entry, idx) => {
+              const embedUrl = toLinkedInEmbedUrl(entry);
+              return (
+                <AnimatedSection key={entry.id} delay={idx * 0.06}>
+                  <article className="bg-v-bg border border-v-border rounded-2xl p-6 md:p-7">
+                    <p className="font-body text-xs text-v-muted mb-2">{prettyDate(entry.date)}</p>
+                    <h2 className="font-display font-bold text-v-ink text-2xl mb-3">{entry.title}</h2>
+                    <p className="font-body text-v-muted mb-4">{entry.summary}</p>
+                    <ul className="space-y-1.5">
+                      {entry.highlights.map((item) => (
+                        <li key={item} className="font-body text-sm text-v-ink flex items-start gap-2">
+                          <span className="text-v-green mt-0.5">•</span>
+                          {item}
+                        </li>
                       ))}
-                    </div>
-                  )}
-                </article>
-              </AnimatedSection>
-            ))}
+                    </ul>
+                    {embedUrl && (
+                      <div className="mt-4">
+                        <iframe
+                          src={embedUrl}
+                          title={`${entry.title} LinkedIn post`}
+                          className="w-full rounded-xl border border-v-border bg-white"
+                          style={{ minHeight: 520 }}
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
+                    {entry.links && entry.links.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {entry.links.map((link) => (
+                          <a
+                            key={link.href}
+                            href={link.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-body px-3 py-1.5 rounded-full border border-v-border text-v-muted hover:text-v-ink hover:border-v-ink transition-colors"
+                          >
+                            {link.label}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </article>
+                </AnimatedSection>
+              );
+            })}
           </div>
         </div>
       </section>

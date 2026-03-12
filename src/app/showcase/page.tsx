@@ -150,10 +150,13 @@ export default async function Showcase() {
       {/* ── PROJECT CARDS ─────────────────────────────────────── */}
       <section className="py-20 bg-v-bg">
         <div className="max-w-7xl mx-auto px-5 md:px-8">
-          <AnimatedSection className="mb-10">
+          <AnimatedSection className="mb-10 flex items-end justify-between flex-wrap gap-3">
             <h2 className="font-display font-bold text-v-ink text-2xl md:text-3xl">
               Every project, documented.
             </h2>
+            <Link href="/updates" className="font-body text-sm font-semibold text-v-blue hover:underline">
+              See progress updates →
+            </Link>
           </AnimatedSection>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {projects.map((p, i) => (

@@ -8,15 +8,15 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const links = [
   { href: "/showcase", label: "Our Work" },
-  { href: "/guides", label: "Guides" },
-  { href: "/updates", label: "Updates" },
   { href: "/about", label: "About" },
   { href: "/partners", label: "For Businesses" },
+  { href: "/join", label: "For Students" },
 ];
 
-const studentsLinks = [
-  { href: "/join", label: "For Students" },
-  { href: "/apply", label: "Apply" },
+const moreLinks = [
+  { href: "/guides", label: "Guides" },
+  { href: "/updates", label: "Updates" },
+  { href: "/members/login", label: "Member Login" },
 ];
 
 /** Pages whose hero sections have a dark background — the navbar should use white text when unscrolled. */
@@ -25,7 +25,7 @@ const darkHeroPages = ["/partners", "/showcase", "/join"];
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
-  const [studentsOpen, setStudentsOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -36,12 +36,11 @@ export default function Navbar() {
 
   useEffect(() => {
     setOpen(false);
-    setStudentsOpen(false);
+    setMoreOpen(false);
   }, [pathname]);
 
   const darkHero = !scrolled && !open && darkHeroPages.includes(pathname);
-  const studentsActive =
-    studentsLinks.some((l) => pathname === l.href) || pathname === "/members";
+  const moreActive = moreLinks.some((l) => pathname === l.href) || pathname.startsWith("/members");
 
   return (
     <>
@@ -83,24 +82,24 @@ export default function Navbar() {
               </Link>
             ))}
 
-            {/* Students dropdown */}
+            {/* More dropdown */}
             <div
               className="relative"
-              onMouseEnter={() => setStudentsOpen(true)}
-              onMouseLeave={() => setStudentsOpen(false)}
+              onMouseEnter={() => setMoreOpen(true)}
+              onMouseLeave={() => setMoreOpen(false)}
             >
               <button
                 className={`font-body text-sm font-semibold transition-colors flex items-center gap-1 ${
-                  studentsActive
+                  moreActive
                     ? "text-v-green"
                     : darkHero
                     ? "text-white/70 hover:text-white"
                     : "text-v-muted hover:text-v-ink"
                 }`}
               >
-                Students
+                More
                 <svg
-                  className={`w-3 h-3 transition-transform duration-200 ${studentsOpen ? "rotate-180" : ""}`}
+                  className={`w-3 h-3 transition-transform duration-200 ${moreOpen ? "rotate-180" : ""}`}
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -110,7 +109,7 @@ export default function Navbar() {
                 </svg>
               </button>
               <AnimatePresence>
-                {studentsOpen && (
+                {moreOpen && (
                   <motion.div
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -119,7 +118,7 @@ export default function Navbar() {
                     className="absolute top-full right-0 pt-3 min-w-[160px]"
                   >
                     <div className="bg-white border border-v-border rounded-xl shadow-lg py-1.5 overflow-hidden">
-                      {studentsLinks.map((l) => (
+                      {moreLinks.map((l) => (
                         <Link
                           key={l.href}
                           href={l.href}
@@ -130,15 +129,6 @@ export default function Navbar() {
                           {l.label}
                         </Link>
                       ))}
-                      <div className="border-t border-v-border my-1" />
-                      <Link
-                        href="/members"
-                        className={`block px-4 py-2.5 font-body text-sm transition-colors hover:bg-v-bg ${
-                          pathname === "/members" ? "text-v-green font-semibold" : "text-v-green"
-                        }`}
-                      >
-                        Member Login
-                      </Link>
                     </div>
                   </motion.div>
                 )}
@@ -185,11 +175,11 @@ export default function Navbar() {
               </Link>
             ))}
 
-            {/* Students section in mobile */}
+            {/* More section in mobile */}
             <div className="border-b border-v-border pb-4">
-              <p className="font-display font-bold text-2xl text-v-ink mb-3">Students</p>
+              <p className="font-display font-bold text-2xl text-v-ink mb-3">More</p>
               <div className="flex flex-col gap-2 pl-2">
-                {studentsLinks.map((l) => (
+                {moreLinks.map((l) => (
                   <Link
                     key={l.href}
                     href={l.href}
@@ -198,12 +188,6 @@ export default function Navbar() {
                     {l.label}
                   </Link>
                 ))}
-                <Link
-                  href="/members"
-                  className="font-body text-base text-v-green"
-                >
-                  Member Login
-                </Link>
               </div>
             </div>
 

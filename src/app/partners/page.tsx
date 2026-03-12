@@ -135,6 +135,38 @@ export default function Partners() {
         </div>
       </section>
 
+      {/* ── GUIDES / NEWSLETTER ─────────────────────────────── */}
+      <section className="py-12 bg-white border-b border-v-border">
+        <div className="max-w-5xl mx-auto px-5 md:px-8">
+          <AnimatedSection className="bg-v-bg border border-v-border rounded-2xl p-6 md:p-8">
+            <p className="font-body text-sm font-semibold text-v-blue uppercase tracking-widest mb-2">
+              Practical resources
+            </p>
+            <h2 className="font-display font-bold text-v-ink text-2xl md:text-3xl mb-3">
+              See what we recommend for owners.
+            </h2>
+            <p className="font-body text-v-muted leading-relaxed mb-5 max-w-3xl">
+              Beyond project work, we publish business guides with practical advice on websites, marketing, and operations.
+              If you want to share your experience or be featured in future newsletters/guides, tell us in the form below or email us directly.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href="/guides"
+                className="inline-block bg-v-ink text-white font-display font-bold text-sm px-6 py-3 rounded-full hover:bg-v-ink/85 transition-colors"
+              >
+                Read Business Guides →
+              </Link>
+              <a
+                href="mailto:info@voltanyc.org"
+                className="inline-block border border-v-border text-v-ink font-display font-bold text-sm px-6 py-3 rounded-full hover:border-v-ink transition-colors"
+              >
+                Talk to us →
+              </a>
+            </div>
+          </AnimatedSection>
+        </div>
+      </section>
+
       {/* ── CONTACT FORM ─────────────────────────────────────── */}
       <section className="py-16 bg-v-bg" id="contact">
         <div className="max-w-3xl mx-auto px-5 md:px-8">
