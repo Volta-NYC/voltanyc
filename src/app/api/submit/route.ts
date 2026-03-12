@@ -155,7 +155,19 @@ async function forwardToAppsScriptBackup(data: Record<string, unknown>): Promise
 }
 
 export async function POST(request: Request) {
-  const data = await request.json() as Record<string, unknown>;
+  let data: Record<string, unknown>;
+  try {
+    data = await request.json() as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+
+  const formType = typeof data.formType === "string" ? data.formType : "";
+  const isKnownFormType = formType === "application" || formType === "contact" || formType === "inquiry";
+  if (!isKnownFormType) {
+    return NextResponse.json({ error: "unknown_form_type" }, { status: 400 });
+  }
+
   const ip = getClientIp(request.headers);
 
   const ipLimit = Number(process.env.FORM_RATE_LIMIT_PER_IP ?? 8);
@@ -194,7 +206,7 @@ export async function POST(request: Request) {
     }
   }
 
-  if (data.formType === "contact") {
+  if (formType === "contact") {
     try {
       await upsertBusinessLeadFromContactForm(data);
     } catch {
@@ -202,7 +214,7 @@ export async function POST(request: Request) {
     }
   }
 
-  if (data.formType === "application") {
+  if (formType === "application") {
     try {
       await upsertApplicationFromForm(data);
     } catch {
@@ -210,7 +222,7 @@ export async function POST(request: Request) {
     }
   }
 
-  if (data.formType === "inquiry") {
+  if (formType === "inquiry") {
     try {
       await upsertInquiryFromForm(data);
     } catch {
@@ -220,9 +232,7 @@ export async function POST(request: Request) {
 
   // Keep legacy Google Sheets logging as best-effort backup only.
   // Primary source of truth is Firebase.
-  if (data.formType === "application" || data.formType === "contact" || data.formType === "inquiry") {
-    await forwardToAppsScriptBackup(data);
-  }
+  await forwardToAppsScriptBackup(data);
 
   return NextResponse.json({ success: true });
 }

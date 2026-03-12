@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyCaller } from "@/lib/server/adminApi";
+import { createTransportForFrom } from "@/lib/server/smtp";
 
 type Decision = "Accepted" | "Waitlisted" | "Not Accepted";
 
@@ -8,6 +9,7 @@ type DecisionEmailBody = {
   applicantEmail?: string;
   decision?: Decision;
   notes?: string;
+  fromAddress?: string;
 };
 
 function buildMessage(name: string, decision: Decision, notes: string): { subject: string; text: string; html: string } {
@@ -31,6 +33,10 @@ function buildMessage(name: string, decision: Decision, notes: string): { subjec
   };
 }
 
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 export async function POST(req: NextRequest) {
   const verified = await verifyCaller(req, ["admin", "project_lead"]);
   if (!verified.ok) return NextResponse.json({ error: verified.error }, { status: verified.status });
@@ -40,6 +46,7 @@ export async function POST(req: NextRequest) {
   const applicantEmail = (body.applicantEmail ?? "").trim().toLowerCase();
   const decision = body.decision;
   const notes = (body.notes ?? "").trim();
+  const requestedFrom = (body.fromAddress ?? "").trim().toLowerCase();
 
   if (!applicantName || !applicantEmail || !decision) {
     return NextResponse.json({ error: "missing_fields" }, { status: 400 });
@@ -48,21 +55,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_email" }, { status: 400 });
   }
 
-  const smtpUser = process.env.INTERVIEW_EMAIL_SMTP_USER ?? "";
-  const smtpPass = process.env.INTERVIEW_EMAIL_SMTP_PASS ?? "";
-  if (!smtpUser || !smtpPass) {
+  const allowedFrom = Array.from(
+    new Set(
+      String(process.env.TEAM_EMAIL_ALLOWED_FROM ?? "info@voltanyc.org,ethan@voltanyc.org")
+        .split(",")
+        .map((value) => normalizeEmail(value))
+        .filter(Boolean)
+    )
+  );
+  const defaultFrom = normalizeEmail(process.env.INTERVIEW_EMAIL_FROM ?? "");
+  const from = requestedFrom || defaultFrom || allowedFrom[0] || "";
+  if (!from || !allowedFrom.includes(from)) {
+    return NextResponse.json({ error: "from_not_allowed" }, { status: 400 });
+  }
+  let transporter: ReturnType<typeof createTransportForFrom>["transporter"];
+  try {
+    transporter = createTransportForFrom(from).transporter;
+  } catch {
     return NextResponse.json({ error: "smtp_not_configured" }, { status: 500 });
   }
-
-  const nodemailer = await import("nodemailer");
-  const transporter = nodemailer.createTransport({
-    host: process.env.INTERVIEW_EMAIL_SMTP_HOST ?? "smtp.gmail.com",
-    port: Number(process.env.INTERVIEW_EMAIL_SMTP_PORT ?? 465),
-    secure: (process.env.INTERVIEW_EMAIL_SMTP_SECURE ?? "true").toLowerCase() !== "false",
-    auth: { user: smtpUser, pass: smtpPass },
-  });
-
-  const from = process.env.INTERVIEW_EMAIL_FROM ?? smtpUser;
   const replyTo = process.env.INTERVIEW_EMAIL_REPLY_TO ?? from;
   const content = buildMessage(applicantName, decision, notes);
 

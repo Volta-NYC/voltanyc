@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyCaller } from "@/lib/server/adminApi";
+import { createTransportForFrom } from "@/lib/server/smtp";
 
 type SendBody = {
   fromAddress?: string;
@@ -45,12 +46,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "too_many_recipients" }, { status: 400 });
   }
 
-  const smtpUser = process.env.INTERVIEW_EMAIL_SMTP_USER ?? "";
-  const smtpPass = process.env.INTERVIEW_EMAIL_SMTP_PASS ?? "";
-  if (!smtpUser || !smtpPass) {
-    return NextResponse.json({ error: "smtp_not_configured" }, { status: 500 });
-  }
-
   const allowedFrom = Array.from(
     new Set(
       String(process.env.TEAM_EMAIL_ALLOWED_FROM ?? "info@voltanyc.org,ethan@voltanyc.org")
@@ -59,19 +54,18 @@ export async function POST(req: NextRequest) {
         .filter((value) => value && isValidEmail(value))
     )
   );
-  const defaultFrom = normalizeEmail(process.env.INTERVIEW_EMAIL_FROM ?? smtpUser);
-  const selectedFrom = requestedFrom || defaultFrom;
+  const defaultFrom = normalizeEmail(process.env.INTERVIEW_EMAIL_FROM ?? "");
+  const selectedFrom = requestedFrom || defaultFrom || allowedFrom[0] || "";
   if (!allowedFrom.includes(selectedFrom)) {
     return NextResponse.json({ error: "from_not_allowed" }, { status: 400 });
   }
 
-  const nodemailer = await import("nodemailer");
-  const transporter = nodemailer.createTransport({
-    host: process.env.INTERVIEW_EMAIL_SMTP_HOST ?? "smtp.gmail.com",
-    port: Number(process.env.INTERVIEW_EMAIL_SMTP_PORT ?? 465),
-    secure: (process.env.INTERVIEW_EMAIL_SMTP_SECURE ?? "true").toLowerCase() !== "false",
-    auth: { user: smtpUser, pass: smtpPass },
-  });
+  let transporter: ReturnType<typeof createTransportForFrom>["transporter"];
+  try {
+    transporter = createTransportForFrom(selectedFrom).transporter;
+  } catch {
+    return NextResponse.json({ error: "smtp_not_configured" }, { status: 500 });
+  }
 
   const fromName = (process.env.TEAM_EMAIL_FROM_NAME ?? "Volta NYC").trim();
   const from = `${fromName} <${selectedFrom}>`;

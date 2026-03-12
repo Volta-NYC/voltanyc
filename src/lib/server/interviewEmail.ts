@@ -1,3 +1,5 @@
+import { createTransportForFrom } from "@/lib/server/smtp";
+
 type BookingEmailInput = {
   to: string;
   bookerName: string;
@@ -163,19 +165,12 @@ async function sendInterviewEmail(input: {
   html: string;
   ics?: { filename: string; content: string };
 }): Promise<void> {
-  const smtpUser = process.env.INTERVIEW_EMAIL_SMTP_USER ?? "";
-  const smtpPass = process.env.INTERVIEW_EMAIL_SMTP_PASS ?? "";
-  if (!smtpUser || !smtpPass) return;
-
-  const nodemailer = await import("nodemailer");
-  const transporter = nodemailer.createTransport({
-    host: process.env.INTERVIEW_EMAIL_SMTP_HOST ?? "smtp.gmail.com",
-    port: Number(process.env.INTERVIEW_EMAIL_SMTP_PORT ?? 465),
-    secure: (process.env.INTERVIEW_EMAIL_SMTP_SECURE ?? "true").toLowerCase() !== "false",
-    auth: { user: smtpUser, pass: smtpPass },
-  });
-
-  const from = process.env.INTERVIEW_EMAIL_FROM ?? smtpUser;
+  const configuredFrom = process.env.INTERVIEW_EMAIL_FROM ?? "";
+  if (!configuredFrom.trim()) {
+    throw new Error("interview_email_from_not_configured");
+  }
+  const { transporter } = createTransportForFrom(configuredFrom);
+  const from = configuredFrom;
   const replyTo = process.env.INTERVIEW_EMAIL_REPLY_TO ?? from;
 
   await transporter.sendMail({
