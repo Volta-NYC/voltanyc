@@ -15,6 +15,7 @@ export interface PublicShowcaseCard {
   color: PublicShowcaseColor;
   desc: string;
   url?: string;
+  imageUrl?: string;
   featuredOnHome: boolean;
   order: number;
 }
@@ -93,6 +94,38 @@ function defaultServicesFromDivision(value: unknown): string[] {
   return ["Business Support"];
 }
 
+function inferDivision(value: unknown, row: Record<string, unknown>): "Tech" | "Marketing" | "Finance" {
+  const direct = asText(value);
+  if (direct === "Tech" || direct === "Marketing" || direct === "Finance") return direct;
+
+  const color = asText(row.showcaseColor).toLowerCase();
+  if (color === "blue") return "Tech";
+  if (color === "amber" || color === "orange") return "Finance";
+  if (color === "green") return "Marketing";
+
+  const services = asStringArray(row.showcaseServices).map((item) => item.toLowerCase());
+  if (services.some((item) => item.includes("grant") || item.includes("finance") || item.includes("ops"))) return "Finance";
+  if (services.some((item) => item.includes("social") || item.includes("content") || item.includes("brand"))) return "Marketing";
+  return "Tech";
+}
+
+function divisionLabel(value: "Tech" | "Marketing" | "Finance"): string {
+  if (value === "Tech") return "Digital & Tech";
+  if (value === "Marketing") return "Marketing & Strategy";
+  return "Finance & Operations";
+}
+
+function normalizeNeighborhood(value: unknown, row: Record<string, unknown>): string {
+  const explicit = asText(value);
+  if (explicit) return explicit;
+
+  const address = asText(row.address);
+  if (!address) return "Neighborhood, Borough";
+  const parts = address.split(",").map((part) => part.trim()).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0]}, ${parts[1]}`;
+  return parts[0];
+}
+
 function normalizeDescription(value: unknown, fallback: string): string {
   const text = asText(value) || fallback;
   if (!text) return "Client project supported by Volta student teams.";
@@ -120,16 +153,18 @@ export async function getPublicShowcaseCards(): Promise<PublicShowcaseCard[]> {
     const name = asText(row.showcaseName) || asText(row.name);
     if (!name) continue;
 
-    const type = asText(row.showcaseType) || asText(row.division) || "Small Business";
-    const neighborhood = asText(row.showcaseNeighborhood) || "New York City";
+    const division = inferDivision(row.division, row);
+    const type = divisionLabel(division);
+    const neighborhood = normalizeNeighborhood(row.showcaseNeighborhood, row);
     const services = asStringArray(row.showcaseServices);
-    const mergedServices = services.length > 0 ? services : defaultServicesFromDivision(row.division);
+    const mergedServices = services.length > 0 ? services : defaultServicesFromDivision(division);
     const status = normalizeStatusFromShowcase(row.showcaseStatus) ?? mapBusinessStatusToShowcase(row.projectStatus);
     const desc = normalizeDescription(row.showcaseDescription, asText(row.notes));
     const url = asText(row.showcaseUrl) || asText(row.website) || "";
+    const imageUrl = asText(row.showcaseImageUrl);
     const color = asText(row.showcaseColor)
       ? normalizeColor(row.showcaseColor)
-      : defaultColorFromDivision(row.division);
+      : defaultColorFromDivision(division);
     const order = asNumber(row.showcaseOrder, 9999);
     const featuredOnHome = asBool(row.showcaseFeaturedOnHome, status !== "Upcoming");
 
@@ -143,6 +178,7 @@ export async function getPublicShowcaseCards(): Promise<PublicShowcaseCard[]> {
       color,
       desc,
       url: url || undefined,
+      imageUrl: imageUrl || undefined,
       featuredOnHome,
       order,
     };

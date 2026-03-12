@@ -14,6 +14,7 @@ const LANG_LABELS: Record<Lang, string> = {
   ar: "العربية",
   fr: "Français",
 };
+const LANG_ORDER: Lang[] = ["en", "es", "fr", "zh", "ko", "ar"];
 
 const SERVICES_BY_LANG: Record<Lang, string[]> = {
   en: ["Website Design & Development", "Social Media & Content", "Grant Research & Writing", "SEO & Google Maps Visibility", "Sales & Financial Analysis", "Digital Payment Setup", "Other"],
@@ -119,7 +120,7 @@ export default function ContactForm() {
     <div>
       {/* Language toggle */}
       <div className="flex flex-wrap gap-2 mb-6">
-        {(Object.keys(LANG_LABELS) as Lang[]).map((l) => (
+        {LANG_ORDER.map((l) => (
           <button
             key={l}
             type="button"

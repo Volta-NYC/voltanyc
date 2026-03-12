@@ -63,7 +63,7 @@ export const businessGuides: GuideEntry[] = [
 export const progressUpdates: UpdateEntry[] = [
   {
     id: "linkedin-7436758651316547585",
-    title: "Volta update on active work and execution momentum",
+    title: "HUB Third Avenue BID Tour + New Jacksonville Partnerships",
     date: "2026-03-09",
     summary:
       "Public update post documenting recent execution progress and current focus areas.",
@@ -77,7 +77,7 @@ export const progressUpdates: UpdateEntry[] = [
   },
   {
     id: "linkedin-7432782997528928256",
-    title: "Volta update on student team growth and operations",
+    title: "BID Tours Across NYC and Early Neighborhood Outreach",
     date: "2026-02-26",
     summary:
       "Public update post covering student expansion, execution priorities, and chapter development.",
@@ -91,7 +91,7 @@ export const progressUpdates: UpdateEntry[] = [
   },
   {
     id: "linkedin-7420976236715315200",
-    title: "Volta update on community partnerships and delivery",
+    title: "Spring 2026 Student Recruitment Announcement",
     date: "2026-01-24",
     summary:
       "Public update post on partner work, delivery outcomes, and next-stage priorities.",

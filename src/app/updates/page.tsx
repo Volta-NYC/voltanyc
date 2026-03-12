@@ -38,12 +38,11 @@ export default function ProgressUpdatesPage() {
               Progress Updates
             </p>
             <h1 className="font-display font-bold text-v-ink text-4xl md:text-5xl leading-tight mb-5">
-              A timestamped record of what we ship.
+              What we&apos;re building, week by week.
             </h1>
             <p className="font-body text-v-muted text-lg max-w-3xl">
-              This page documents our execution over time: systems, projects, and team
-              operations. It is meant to be useful as public accountability and as context
-              for future applicants.
+              This is where we share updates on projects, team milestones, and new systems
+              as they roll out. It&apos;s a simple running log of our work and progress.
             </p>
           </AnimatedSection>
         </div>
@@ -58,16 +57,6 @@ export default function ProgressUpdatesPage() {
                 <AnimatedSection key={entry.id} delay={idx * 0.06}>
                   <article className="bg-v-bg border border-v-border rounded-2xl p-6 md:p-7">
                     <p className="font-body text-xs text-v-muted mb-2">{prettyDate(entry.date)}</p>
-                    <h2 className="font-display font-bold text-v-ink text-2xl mb-3">{entry.title}</h2>
-                    <p className="font-body text-v-muted mb-4">{entry.summary}</p>
-                    <ul className="space-y-1.5">
-                      {entry.highlights.map((item) => (
-                        <li key={item} className="font-body text-sm text-v-ink flex items-start gap-2">
-                          <span className="text-v-green mt-0.5">•</span>
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
                     {embedUrl && (
                       <div className="mt-4">
                         <iframe
@@ -78,6 +67,20 @@ export default function ProgressUpdatesPage() {
                           loading="lazy"
                         />
                       </div>
+                    )}
+                    {!embedUrl && (
+                      <>
+                        <h2 className="font-display font-bold text-v-ink text-2xl mb-3">{entry.title}</h2>
+                        <p className="font-body text-v-muted mb-4">{entry.summary}</p>
+                        <ul className="space-y-1.5">
+                          {entry.highlights.map((item) => (
+                            <li key={item} className="font-body text-sm text-v-ink flex items-start gap-2">
+                              <span className="text-v-green mt-0.5">•</span>
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </>
                     )}
                     {entry.links && entry.links.length > 0 && (
                       <div className="mt-4 flex flex-wrap gap-2">

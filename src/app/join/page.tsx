@@ -114,8 +114,8 @@ export default function Join() {
       />
 
       <section className="bg-v-ink pt-32 pb-20">
-        <div className="max-w-7xl mx-auto px-5 md:px-8 grid md:grid-cols-2 gap-10 items-start">
-          <AnimatedSection direction="left">
+        <div className="max-w-7xl mx-auto px-5 md:px-8">
+          <AnimatedSection>
             <p className="font-body text-sm font-semibold text-v-green uppercase tracking-widest mb-4">
               Join Volta NYC
             </p>
@@ -140,28 +140,8 @@ export default function Join() {
               </Link>
             </div>
             <p className="font-body text-sm text-white/50">
-              Takes 5 minutes · Rolling admissions · We usually get back to you within 3 days.
+              Takes 5 minutes · Rolling admissions.
             </p>
-          </AnimatedSection>
-
-          <AnimatedSection direction="right">
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-7">
-              <p className="font-body text-xs uppercase tracking-widest text-v-green font-semibold mb-4">Tracks</p>
-              <ul className="space-y-3 mb-5">
-                {joinTracks.map((track) => (
-                  <li key={track.name} className="font-body text-sm text-white/80 flex items-start gap-2.5">
-                    <span className="text-v-green mt-0.5">•</span>
-                    <span>
-                      <span className="font-semibold text-white">{track.name}:</span>{" "}
-                      {track.doWhat.slice(0, 2).join("; ")}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <p className="font-body text-sm text-white/60">
-                You can start in one track and move across tracks as you grow.
-              </p>
-            </div>
           </AnimatedSection>
         </div>
       </section>

@@ -42,6 +42,7 @@ export default async function Home() {
       colorClass: SHOWCASE_COLOR_CLASS[card.color] ?? "bg-v-green",
       desc: card.desc,
       url: card.url,
+      imageUrl: card.imageUrl,
     }));
 
   const currentProjects = publicHomeCards.length > 0
@@ -54,6 +55,7 @@ export default async function Home() {
       colorClass: project.color,
       desc: project.desc,
       url: project.url,
+      imageUrl: undefined as string | undefined,
     }));
 
   const getServiceTagClass = (service: string) => {
@@ -221,8 +223,13 @@ export default async function Home() {
               <AnimatedSection key={p.name} delay={i * 0.1}>
                 <div className="border border-v-border rounded-2xl overflow-hidden project-card bg-v-bg">
                   <div className={`${p.colorClass} h-2`} />
-                  <div className="mx-6 mt-6 rounded-xl border border-v-border bg-white h-36 flex items-center justify-center">
-                    <span className="font-body text-xs text-v-muted uppercase tracking-wider">Project photo coming soon</span>
+                  <div
+                    className="mx-6 mt-6 rounded-xl border border-v-border h-36 flex items-center justify-center bg-white bg-cover bg-center"
+                    style={p.imageUrl ? { backgroundImage: `url("${p.imageUrl.replace(/"/g, "%22")}")` } : undefined}
+                  >
+                    {!p.imageUrl && (
+                      <span className="font-body text-xs text-v-muted uppercase tracking-wider">Project photo coming soon</span>
+                    )}
                   </div>
                   <div className="p-6">
                     <span className={`tag border mb-4 inline-block ${getServiceTagClass(p.services[0])}`}>{p.services[0]}</span>

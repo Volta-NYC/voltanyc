@@ -135,6 +135,28 @@ export default function Partners() {
         </div>
       </section>
 
+      {/* ── CONTACT FORM ─────────────────────────────────────── */}
+      <section className="py-16 bg-v-bg" id="contact">
+        <div className="max-w-3xl mx-auto px-5 md:px-8">
+          <AnimatedSection className="mb-10">
+            <p className="font-body text-sm font-semibold text-v-green uppercase tracking-widest mb-3">
+              Request support
+            </p>
+            <h2 className="font-display font-bold text-v-ink text-3xl md:text-4xl mb-4">
+              Work with us
+            </h2>
+            <p className="font-body text-v-muted max-w-xl">
+              Tell us about your business and what you need. Switch the form to your
+              preferred language using the toggle below. If you were referred by a BID,
+              mention that in your message. We&apos;re also open to a quick Zoom chat.
+            </p>
+          </AnimatedSection>
+          <AnimatedSection>
+            <ContactForm />
+          </AnimatedSection>
+        </div>
+      </section>
+
       {/* ── GUIDES / NEWSLETTER ─────────────────────────────── */}
       <section className="py-12 bg-white border-b border-v-border">
         <div className="max-w-5xl mx-auto px-5 md:px-8">
@@ -147,7 +169,7 @@ export default function Partners() {
             </h2>
             <p className="font-body text-v-muted leading-relaxed mb-5 max-w-3xl">
               Beyond project work, we publish business guides with practical advice on websites, marketing, and operations.
-              If you want to share your experience or be featured in future newsletters/guides, tell us in the form below or email us directly.
+              If you want to share your experience or be featured in future newsletters/guides, tell us in the form above or email us directly.
             </p>
             <div className="flex flex-wrap gap-3">
               <Link
@@ -163,28 +185,6 @@ export default function Partners() {
                 Talk to us →
               </a>
             </div>
-          </AnimatedSection>
-        </div>
-      </section>
-
-      {/* ── CONTACT FORM ─────────────────────────────────────── */}
-      <section className="py-16 bg-v-bg" id="contact">
-        <div className="max-w-3xl mx-auto px-5 md:px-8">
-          <AnimatedSection className="mb-10">
-            <p className="font-body text-sm font-semibold text-v-green uppercase tracking-widest mb-3">
-              Start a conversation
-            </p>
-            <h2 className="font-display font-bold text-v-ink text-3xl md:text-4xl mb-4">
-              Work with us
-            </h2>
-            <p className="font-body text-v-muted max-w-xl">
-              Tell us about your business and what you need. Switch the form to your
-              preferred language using the toggle below. If you were referred by a BID,
-              mention that in your message. We&apos;re also open to a quick Zoom chat.
-            </p>
-          </AnimatedSection>
-          <AnimatedSection>
-            <ContactForm />
           </AnimatedSection>
         </div>
       </section>

@@ -73,6 +73,7 @@ export interface Business {
   showcaseStatus?: "In Progress" | "Active" | "Upcoming";
   showcaseDescription?: string;
   showcaseUrl?: string;
+  showcaseImageUrl?: string;
   showcaseColor?: "green" | "blue" | "orange" | "amber" | "pink" | "purple";
 }
 
