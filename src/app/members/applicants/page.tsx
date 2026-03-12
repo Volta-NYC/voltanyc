@@ -147,9 +147,8 @@ export default function ApplicantsPage() {
   const [slots, setSlots] = useState<InterviewSlot[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [search, setSearch] = useState("");
-  const [showPipelineOnly, setShowPipelineOnly] = useState(true);
+  const [showAcceptedApplicants, setShowAcceptedApplicants] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [bulkRole, setBulkRole] = useState("Member");
   const [importing, setImporting] = useState(false);
   const [sendingInvites, setSendingInvites] = useState(false);
   const [sendingReminders, setSendingReminders] = useState(false);
@@ -207,7 +206,7 @@ export default function ApplicantsPage() {
     [slots],
   );
 
-  const matchBookedSlot = (app: ApplicationRecord): InterviewSlot | undefined => {
+  const matchBookedSlot = useCallback((app: ApplicationRecord): InterviewSlot | undefined => {
     const appEmail = normalize(app.email);
     const appCanonical = canonicalEmail(appEmail);
     const appName = app.fullName;
@@ -222,33 +221,38 @@ export default function ApplicantsPage() {
       if (appName && slotName && namesLikelyMatch(appName, slotName)) return true;
       return false;
     });
-  };
+  }, [bookedSlots]);
 
   const filtered = useMemo(() => {
     const q = normalize(search);
     return [...applications]
       .filter((app) => {
-        if (showPipelineOnly) {
-          const invited = !!app.interviewInviteSentAt;
-          const inLaterStage = ["interview pending", "interview scheduled", "accepted", "waitlisted", "not accepted"]
-            .includes(normalize(app.status));
-          if (invited || inLaterStage) return false;
-        }
+        if (!showAcceptedApplicants && normalize(app.status) === "accepted") return false;
         if (!q) return true;
         return normalize(app.fullName).includes(q)
           || normalize(app.email).includes(q)
           || normalize(app.schoolName ?? "").includes(q)
           || normalize(app.status).includes(q);
       })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [applications, search, showPipelineOnly]);
+      .sort((a, b) => {
+        const aInvited = !!a.interviewInviteSentAt;
+        const bInvited = !!b.interviewInviteSentAt;
+        if (aInvited !== bInvited) return aInvited ? 1 : -1; // uninvited first
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(); // newest first
+      });
+  }, [applications, search, showAcceptedApplicants]);
 
   const uninvitedApplicantIds = useMemo(
     () =>
       applications
-        .filter((app) => !app.interviewInviteSentAt && !["accepted", "waitlisted", "not accepted"].includes(normalize(app.status)))
+        .filter((app) => {
+          if (app.interviewInviteSentAt) return false;
+          if (["accepted", "waitlisted", "not accepted", "interview scheduled"].includes(normalize(app.status))) return false;
+          if (matchBookedSlot(app)) return false;
+          return true;
+        })
         .map((app) => app.id),
-    [applications]
+    [applications, matchBookedSlot]
   );
 
   const selectableFilteredIds = useMemo(() => filtered.map((app) => app.id), [filtered]);
@@ -278,7 +282,11 @@ export default function ApplicantsPage() {
     }
   };
 
-  const sendInterviewInviteEmails = async (ids: string[], mode: "initial" | "reminder") => {
+  const sendInterviewInviteEmails = async (
+    ids: string[],
+    mode: "initial" | "reminder",
+    allowAlreadyInvited = false
+  ) => {
     if (!user || ids.length === 0) return { sent: 0, skipped: 0, failed: 0 };
     const token = await user.getIdToken();
     if (!token) return { sent: 0, skipped: 0, failed: ids.length };
@@ -291,6 +299,7 @@ export default function ApplicantsPage() {
       body: JSON.stringify({
         mode,
         applicationIds: ids,
+        allowAlreadyInvited,
       }),
     });
     if (!response.ok) throw new Error("send_invite_failed");
@@ -309,7 +318,7 @@ export default function ApplicantsPage() {
   const sendInviteForApplicant = async (app: ApplicationRecord) => {
     setSendingInvites(true);
     try {
-      const result = await sendInterviewInviteEmails([app.id], "initial");
+      const result = await sendInterviewInviteEmails([app.id], "initial", !!app.interviewInviteSentAt);
       setStatusMessage(`Invite email result — sent: ${result.sent}, skipped: ${result.skipped}, failed: ${result.failed}.`);
       await fetchApplicantsData();
     } catch {
@@ -326,7 +335,7 @@ export default function ApplicantsPage() {
     }
     setSendingInvites(true);
     try {
-      const result = await sendInterviewInviteEmails(uninvitedApplicantIds, "initial");
+      const result = await sendInterviewInviteEmails(uninvitedApplicantIds, "initial", false);
       setStatusMessage(`Invite all result — sent: ${result.sent}, skipped: ${result.skipped}, failed: ${result.failed}.`);
       await fetchApplicantsData();
     } catch {
@@ -343,7 +352,7 @@ export default function ApplicantsPage() {
     }
     setSendingInvites(true);
     try {
-      const result = await sendInterviewInviteEmails(selectedIds, "initial");
+      const result = await sendInterviewInviteEmails(selectedIds, "initial", false);
       setStatusMessage(`Invite selected result — sent: ${result.sent}, skipped: ${result.skipped}, failed: ${result.failed}.`);
       await fetchApplicantsData();
     } catch {
@@ -353,12 +362,11 @@ export default function ApplicantsPage() {
     }
   };
 
-  const promoteApplicant = async (app: ApplicationRecord, shouldEmail: boolean, roleOverride?: string) => {
+  const promoteApplicant = async (app: ApplicationRecord, shouldEmail: boolean) => {
     if (!user) throw new Error("not_authenticated");
     const token = await user.getIdToken();
     await updateApplicantServer(app.id, {
       status: "Accepted",
-      finalDecisionRole: roleOverride || bulkRole,
     });
     await fetch("/api/members/applicants/promote", {
       method: "POST",
@@ -371,7 +379,6 @@ export default function ApplicantsPage() {
         email: app.email,
         schoolName: app.schoolName,
         grade: app.grade,
-        role: roleOverride || bulkRole,
       }),
     });
     if (shouldEmail) {
@@ -474,7 +481,6 @@ export default function ApplicantsPage() {
               email: editing.email,
               schoolName: editing.schoolName,
               grade: editing.grade,
-              role: bulkRole,
             }),
           });
           if (!promoteResponse.ok) promoteFailed = true;
@@ -672,23 +678,14 @@ export default function ApplicantsPage() {
         <label className="inline-flex items-center gap-2 text-xs text-white/65">
           <input
             type="checkbox"
-            checked={showPipelineOnly}
-            onChange={(e) => setShowPipelineOnly(e.target.checked)}
+            checked={showAcceptedApplicants}
+            onChange={(e) => setShowAcceptedApplicants(e.target.checked)}
             className="accent-[#85CC17]"
           />
-          Show only pre-invite queue
+          Show accepted applicants
         </label>
         {canEdit && (
           <>
-            <select
-              value={bulkRole}
-              onChange={(e) => setBulkRole(e.target.value)}
-              className="bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2 text-xs text-white"
-            >
-              {["Member", "Analyst", "Senior Analyst", "Associate", "Senior Associate", "Project Lead"].map((role) => (
-                <option key={role} value={role}>{role}</option>
-              ))}
-            </select>
             <Btn
               size="sm"
               variant="secondary"
@@ -786,9 +783,6 @@ export default function ApplicantsPage() {
                   </td>
                   <td className="px-4 py-3 text-xs text-white/70">
                     <div>{app.status}</div>
-                    {app.finalDecisionRole ? (
-                      <div className="text-[11px] text-white/40 mt-0.5">Role: {app.finalDecisionRole}</div>
-                    ) : null}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">

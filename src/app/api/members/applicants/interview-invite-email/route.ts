@@ -11,6 +11,7 @@ type Mode = "initial" | "reminder";
 type RequestBody = {
   mode?: Mode;
   applicationIds?: string[];
+  allowAlreadyInvited?: boolean;
 };
 
 type ApplicationRow = {
@@ -18,6 +19,7 @@ type ApplicationRow = {
   email?: string;
   status?: string;
   interviewInviteToken?: string;
+  interviewInviteSentAt?: string;
 };
 
 type InterviewSlotRow = {
@@ -87,6 +89,7 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json()) as RequestBody;
   const mode = body.mode ?? "initial";
+  const allowAlreadyInvited = !!body.allowAlreadyInvited;
   const applicationIds = Array.isArray(body.applicationIds) ? body.applicationIds.filter(Boolean) : [];
   if (applicationIds.length === 0) {
     return NextResponse.json({ error: "missing_application_ids" }, { status: 400 });
@@ -126,7 +129,18 @@ export async function POST(req: NextRequest) {
     let token = (row.interviewInviteToken ?? "").trim();
     if (!token) token = generateToken(16);
 
-    if (mode === "reminder" && hasBookedSlotForApplicant(row, slotsMap)) {
+    const alreadyInvited = !!String(row.interviewInviteSentAt ?? "").trim();
+    const alreadyBooked = hasBookedSlotForApplicant(row, slotsMap);
+    if (alreadyBooked) {
+      skipped += 1;
+      continue;
+    }
+    if (mode === "initial" && alreadyInvited && !allowAlreadyInvited) {
+      skipped += 1;
+      continue;
+    }
+
+    if (mode === "reminder" && alreadyBooked) {
       skipped += 1;
       continue;
     }
