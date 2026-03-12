@@ -30,8 +30,20 @@ export default function Navbar() {
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
+    // Sync immediately on mount so deep-links (e.g. /partners#contact) use the
+    // correct navbar contrast before any manual scroll happens.
+    onScroll();
+    const raf = window.requestAnimationFrame(onScroll);
+    const timeout = window.setTimeout(onScroll, 80);
+
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener("hashchange", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("hashchange", onScroll);
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(timeout);
+    };
   }, []);
 
   useEffect(() => {
