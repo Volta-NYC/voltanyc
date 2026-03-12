@@ -725,11 +725,11 @@ export default function ApplicantsPage() {
       </div>
 
       <div className="bg-[#1C1F26] border border-white/8 rounded-xl overflow-x-auto">
-        <table className="w-full min-w-[1500px]">
+        <table className="w-full min-w-[1380px] text-[11px] leading-4">
           <thead className="bg-[#0F1014] border-b border-white/8">
             <tr>
               {canEdit && (
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/45">
+                <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-white/45">
                   <input
                     type="checkbox"
                     className="accent-[#85CC17]"
@@ -742,7 +742,7 @@ export default function ApplicantsPage() {
                 </th>
               )}
               {["Status", "Name", "Email", "School Name", "City, State", "How They Heard", "Tracks", "Resume URL", "Applied", "Invite", "Interview", "Actions"].map((col) => (
-                <th key={col} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/45">{col}</th>
+                <th key={col} className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-white/45 whitespace-nowrap">{col}</th>
               ))}
             </tr>
           </thead>
@@ -754,9 +754,9 @@ export default function ApplicantsPage() {
               const bookedAfterInvite = Number.isFinite(inviteSentAt) && Number.isFinite(bookedAt) && bookedAt >= inviteSentAt;
               const evalCount = Object.keys((app.interviewEvaluations ?? {}) as Record<string, unknown>).length;
               return (
-                <tr key={app.id} className="hover:bg-white/3 transition-colors">
+                <tr key={app.id} className="hover:bg-white/3 transition-colors align-top">
                   {canEdit && (
-                    <td className="px-3 py-3">
+                    <td className="px-2 py-1.5">
                       <input
                         type="checkbox"
                         className="accent-[#85CC17]"
@@ -768,36 +768,36 @@ export default function ApplicantsPage() {
                       />
                     </td>
                   )}
-                  <td className="px-4 py-3 text-xs">
+                  <td className="px-2 py-1.5">
                     {canManageStatus ? (
                       <select
                         value={STATUS_OPTIONS.includes(app.status) ? app.status : "New"}
                         onChange={(e) => void updateRowStatus(app, e.target.value as ApplicationStatus)}
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold focus:outline-none ${STATUS_BADGE_CLASS[app.status] ?? STATUS_BADGE_CLASS["New"]}`}
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold focus:outline-none ${STATUS_BADGE_CLASS[app.status] ?? STATUS_BADGE_CLASS["New"]}`}
                       >
                         {STATUS_OPTIONS.map((status) => (
                           <option key={status} value={status}>{status}</option>
                         ))}
                       </select>
                     ) : (
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${STATUS_BADGE_CLASS[app.status] ?? STATUS_BADGE_CLASS["New"]}`}>
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_BADGE_CLASS[app.status] ?? STATUS_BADGE_CLASS["New"]}`}>
                         {app.status}
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-white/85">{app.fullName}</td>
-                  <td className="px-4 py-3 text-white/60 font-mono text-xs">{app.email}</td>
-                  <td className="px-4 py-3 text-white/55 text-sm">{app.schoolName || "—"}</td>
-                  <td className="px-4 py-3 text-white/50 text-xs">{app.cityState || "—"}</td>
-                  <td className="px-4 py-3 text-white/50 text-xs">{app.referral || "—"}</td>
-                  <td className="px-4 py-3 text-white/50 text-xs">{app.tracksSelected || "—"}</td>
-                  <td className="px-4 py-3 text-xs">
+                  <td className="px-2 py-1.5 text-white/85">{app.fullName}</td>
+                  <td className="px-2 py-1.5 text-white/60 font-mono">{app.email}</td>
+                  <td className="px-2 py-1.5 text-white/55">{app.schoolName || "—"}</td>
+                  <td className="px-2 py-1.5 text-white/50">{app.cityState || "—"}</td>
+                  <td className="px-2 py-1.5 text-white/50">{app.referral || "—"}</td>
+                  <td className="px-2 py-1.5 text-white/50">{app.tracksSelected || "—"}</td>
+                  <td className="px-2 py-1.5">
                     {app.resumeUrl ? (
                       <a
                         href={app.resumeUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[#85CC17]/80 hover:text-[#85CC17] underline"
+                        className="text-[#85CC17]/80 hover:text-[#85CC17] underline whitespace-nowrap"
                       >
                         Open
                       </a>
@@ -805,36 +805,36 @@ export default function ApplicantsPage() {
                       <span className="text-white/30">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-white/45 text-xs">{formatDateTime(app.createdAt)}</td>
-                  <td className="px-4 py-3 text-xs">
+                  <td className="px-2 py-1.5 text-white/45 whitespace-nowrap">{formatDateTime(app.createdAt)}</td>
+                  <td className="px-2 py-1.5">
                     {app.interviewInviteSentAt ? (
                       <div className="text-white/65">
-                        <div>{formatDateTime(app.interviewInviteSentAt)}</div>
+                        <div className="whitespace-nowrap">{formatDateTime(app.interviewInviteSentAt)}</div>
                         {app.interviewReminderSentAt ? (
-                          <div className="text-[11px] text-white/40 mt-1">Reminder: {formatDateTime(app.interviewReminderSentAt)}</div>
+                          <div className="text-[10px] text-white/40 mt-0.5 whitespace-nowrap">Reminder: {formatDateTime(app.interviewReminderSentAt)}</div>
                         ) : null}
                       </div>
                     ) : (
                       <span className="text-white/30">Not sent</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-xs">
+                  <td className="px-2 py-1.5">
                     {latestInterview ? (
                       <div className="text-white/65">
-                        <div>{formatDateTime(latestInterview.datetime)}</div>
+                        <div className="whitespace-nowrap">{formatDateTime(latestInterview.datetime)}</div>
                         {bookedAfterInvite ? (
-                          <div className="text-[11px] text-emerald-300 mt-1">Booked after invite</div>
+                          <div className="text-[10px] text-emerald-300 mt-0.5">Booked after invite</div>
                         ) : null}
                         {evalCount > 0 ? (
-                          <div className="text-[11px] text-white/40 mt-1">{evalCount} evaluation{evalCount > 1 ? "s" : ""}</div>
+                          <div className="text-[10px] text-white/40 mt-0.5">{evalCount} evaluation{evalCount > 1 ? "s" : ""}</div>
                         ) : null}
                       </div>
                     ) : (
                       <span className="text-white/30">Not booked</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
+                  <td className="px-2 py-1.5">
+                    <div className="flex gap-1.5 flex-wrap">
                       {canEdit && (
                         <>
                           <Btn
