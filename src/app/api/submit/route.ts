@@ -8,7 +8,7 @@ function asText(value: unknown): string {
 
 async function upsertBusinessLeadFromContactForm(data: Record<string, unknown>): Promise<void> {
   const db = getAdminDB();
-  if (!db) return;
+  if (!db) throw new Error("firebase_admin_unavailable");
 
   const businessName = asText(data.businessName);
   const ownerName = asText(data.name);
@@ -84,7 +84,7 @@ function splitToCsv(values: unknown): string {
 
 async function upsertApplicationFromForm(data: Record<string, unknown>): Promise<void> {
   const db = getAdminDB();
-  if (!db) return;
+  if (!db) throw new Error("firebase_admin_unavailable");
 
   const fullName = asText(data["Full Name"]);
   const email = asText(data.Email).toLowerCase();
@@ -94,23 +94,6 @@ async function upsertApplicationFromForm(data: Record<string, unknown>): Promise
   const cityState = asText(data["City, State"]) || asText(data.City);
   const tracks = splitToCsv(data["Tracks Selected"]);
   const createdAt = new Date().toISOString();
-
-  const appsSnap = await db.ref("applications").get();
-  if (appsSnap.exists()) {
-    const entries = appsSnap.val() as Record<string, Record<string, unknown>>;
-    const duplicateRecent = Object.values(entries).some((entry) => {
-      const entryEmail = asText(entry.email).toLowerCase();
-      const entryName = asText(entry.fullName).toLowerCase();
-      const entryCreatedAt = Date.parse(asText(entry.createdAt));
-      if (!entryCreatedAt) return false;
-      return (
-        entryEmail === email
-        && entryName === fullName.toLowerCase()
-        && Date.now() - entryCreatedAt <= 6 * 60 * 60 * 1000
-      );
-    });
-    if (duplicateRecent) return;
-  }
 
   await db.ref("applications").push({
     fullName,
@@ -135,7 +118,7 @@ async function upsertApplicationFromForm(data: Record<string, unknown>): Promise
 
 async function upsertInquiryFromForm(data: Record<string, unknown>): Promise<void> {
   const db = getAdminDB();
-  if (!db) return;
+  if (!db) throw new Error("firebase_admin_unavailable");
 
   const name = asText(data.name);
   const email = asText(data.email).toLowerCase();

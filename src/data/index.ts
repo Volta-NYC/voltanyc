@@ -241,7 +241,7 @@ export const aboutTimeline = [
 export const teamMembers = [
   { name: "Ethan Zhang", role: "Founder", email: "ethan@voltanyc.org", initial: "E", desc: "", photo: "/team/ethan.png" },
   { name: "Andrew Chin", role: "Director", email: "andrew@voltanyc.org", initial: "A", desc: "", photo: "/team/andrew.jpeg" },
-  { name: "Joseph Long", role: "Assistant Director", email: "joseph.long.nyc@gmail.com", initial: "J", desc: "", photo: "/team/joseph.jpg" },
+  { name: "Joseph Long", role: "Director of Outreach", email: "joseph.long.nyc@gmail.com", initial: "J", desc: "", photo: "/team/joseph.jpg" },
   { name: "Tahmid Islam", role: "Tech Lead", email: "islamtahmidd@gmail.com", initial: "T", desc: "", photo: "/team/tahmid.png" },
 ];
 
