@@ -28,7 +28,7 @@ const STATUS_BADGE_CLASS: Record<string, string> = {
 };
 
 function normalize(v: string): string {
-  return v.trim().toLowerCase();
+  return v.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 
@@ -212,7 +212,9 @@ export default function ApplicantsPage() {
     const appCanonical = canonicalEmail(appEmail);
     const appName = app.fullName;
     const token = normalize(app.interviewInviteToken ?? "");
+    const appSlotId = normalize(app.interviewSlotId ?? "");
     return bookedSlots.find((slot) => {
+      if (appSlotId && normalize(slot.id) === appSlotId) return true;
       const slotEmail = normalize(slot.bookerEmail ?? "");
       const slotCanonical = canonicalEmail(slotEmail);
       const slotName = slot.bookerName ?? "";
@@ -252,6 +254,18 @@ export default function ApplicantsPage() {
   );
 
   const selectableFilteredIds = useMemo(() => filtered.map((app) => app.id), [filtered]);
+
+  const allNotBookedApplicantIds = useMemo(
+    () =>
+      applications
+        .filter((app) => {
+          if (["accepted", "waitlisted", "not accepted", "interview scheduled"].includes(normalize(app.status))) return false;
+          if (matchBookedSlot(app)) return false;
+          return true;
+        })
+        .map((app) => app.id),
+    [applications, matchBookedSlot]
+  );
 
   const updateApplicantServer = async (id: string, patch: Record<string, unknown>) => {
     if (!user) throw new Error("not_authenticated");
@@ -446,6 +460,54 @@ export default function ApplicantsPage() {
     }
   };
 
+  const emailAllNotBooked = async () => {
+    if (!canEdit) return;
+    const unbookedApps = applications.filter((app) => (
+      !["accepted", "waitlisted", "not accepted", "interview scheduled"].includes(normalize(app.status))
+      && !matchBookedSlot(app)
+    ));
+    if (unbookedApps.length === 0) {
+      setStatusMessage("No unbooked applicants found.");
+      return;
+    }
+
+    const neverInvitedIds = unbookedApps
+      .filter((app) => !app.interviewInviteSentAt)
+      .map((app) => app.id);
+    const invitedNotBookedIds = unbookedApps
+      .filter((app) => !!app.interviewInviteSentAt)
+      .map((app) => app.id);
+
+    setSendingInvites(true);
+    setSendingReminders(true);
+    try {
+      let totalSent = 0;
+      let totalSkipped = 0;
+      let totalFailed = 0;
+
+      if (neverInvitedIds.length > 0) {
+        const initialResult = await sendInterviewInviteEmails(neverInvitedIds, "initial", false);
+        totalSent += initialResult.sent;
+        totalSkipped += initialResult.skipped;
+        totalFailed += initialResult.failed;
+      }
+      if (invitedNotBookedIds.length > 0) {
+        const reminderResult = await sendInterviewInviteEmails(invitedNotBookedIds, "reminder", true);
+        totalSent += reminderResult.sent;
+        totalSkipped += reminderResult.skipped;
+        totalFailed += reminderResult.failed;
+      }
+
+      setStatusMessage(`Email all not booked — sent: ${totalSent}, skipped: ${totalSkipped}, failed: ${totalFailed}.`);
+      await fetchApplicantsData();
+    } catch {
+      setStatusMessage("Could not email all unbooked applicants.");
+    } finally {
+      setSendingInvites(false);
+      setSendingReminders(false);
+    }
+  };
+
   const updateRowStatus = async (app: ApplicationRecord, nextStatus: ApplicationStatus) => {
     if (!canManageStatus) return;
     try {
@@ -611,6 +673,13 @@ export default function ApplicantsPage() {
               </Btn>
               <Btn variant="secondary" onClick={remindUnbookedAfterTwoDays} disabled={sendingReminders || sendingInvites}>
                 {sendingReminders ? "Sending reminders..." : "Remind Unbooked (2+ days)"}
+              </Btn>
+              <Btn
+                variant="secondary"
+                onClick={emailAllNotBooked}
+                disabled={sendingInvites || sendingReminders || allNotBookedApplicantIds.length === 0}
+              >
+                {sendingInvites || sendingReminders ? "Sending..." : `Email All Not Booked (${allNotBookedApplicantIds.length})`}
               </Btn>
               <Btn variant="secondary" onClick={() => fileInputRef.current?.click()} disabled={importing}>
                 {importing ? "Importing..." : "Import CSV"}

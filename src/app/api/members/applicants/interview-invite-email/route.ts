@@ -21,6 +21,7 @@ type ApplicationRow = {
   statusManualOverride?: boolean;
   interviewInviteToken?: string;
   interviewInviteSentAt?: string;
+  interviewSlotId?: string;
 };
 
 type InterviewSlotRow = {
@@ -31,7 +32,7 @@ type InterviewSlotRow = {
 };
 
 function normalize(value: string): string {
-  return value.trim().toLowerCase();
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 function normalizeName(value: string): string {
@@ -71,8 +72,10 @@ function hasBookedSlotForApplicant(
   const canonical = canonicalEmail(email);
   const name = app.fullName ?? "";
   const inviteToken = normalize(app.interviewInviteToken ?? "");
-  return Object.values(slotsMap).some((slot) => {
+  const appSlotId = normalize(app.interviewSlotId ?? "");
+  return Object.entries(slotsMap).some(([slotId, slot]) => {
     if (slot.available) return false;
+    if (appSlotId && normalize(slotId) === appSlotId) return true;
     const slotEmail = normalize(slot.bookerEmail ?? "");
     const slotCanonical = canonicalEmail(slotEmail);
     const slotName = slot.bookerName ?? "";
