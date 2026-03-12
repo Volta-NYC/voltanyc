@@ -833,13 +833,14 @@ export default function ApplicantsPage() {
                       <span className="text-white/30">Not booked</span>
                     )}
                   </td>
-                  <td className="px-2 py-1.5">
-                    <div className="flex gap-1.5 flex-wrap">
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    <div className="flex gap-1 flex-nowrap">
                       {canEdit && (
                         <>
                           <Btn
                             size="sm"
                             variant="secondary"
+                            className="!px-2 !py-0.5 !text-[10px] leading-none whitespace-nowrap"
                             onClick={() => sendInviteForApplicant(app)}
                             disabled={sendingInvites || sendingReminders}
                           >
@@ -848,6 +849,7 @@ export default function ApplicantsPage() {
                           <Btn
                             size="sm"
                             variant="primary"
+                            className="!px-2 !py-0.5 !text-[10px] leading-none whitespace-nowrap"
                             onClick={async () => {
                               setBulkPromoting(true);
                               try {
@@ -868,6 +870,7 @@ export default function ApplicantsPage() {
                             <Btn
                               size="sm"
                               variant="danger"
+                              className="!px-2 !py-0.5 !text-[10px] leading-none whitespace-nowrap"
                               onClick={() => {
                                 void ask(
                                   async () => {

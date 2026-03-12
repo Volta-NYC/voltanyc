@@ -624,7 +624,7 @@ export default function TeamPage() {
       <div
         className="relative bg-[#1C1F26] border border-white/8 rounded-xl overflow-x-auto select-text"
       >
-        <table className="w-full min-w-[900px]">
+        <table className="w-full min-w-[980px] text-[11px] leading-4">
           <thead className="bg-[#0F1014] border-b border-white/8">
             <tr>
               {["Track", "Name", "Email", "School", "Grade", "Date Accepted", "Actions"].map((col, idx) => {
@@ -633,7 +633,7 @@ export default function TeamPage() {
                 return (
                   <th
                     key={col}
-                    className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/45 ${sortable ? "cursor-pointer select-none" : ""}`}
+                    className={`px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-white/45 whitespace-nowrap ${sortable ? "cursor-pointer select-none" : ""}`}
                     onClick={() => sortable && handleSort(idx)}
                   >
                     <span className="inline-flex items-center gap-1">
@@ -652,40 +652,40 @@ export default function TeamPage() {
               return (
                 <tr
                   key={member.id}
-                  className="hover:bg-white/3 transition-colors"
+                  className="hover:bg-white/3 transition-colors align-top"
                 >
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-white/65 text-xs font-semibold">{track}</span>
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    <span className="text-white/65 text-[10px] font-semibold">{track}</span>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatar.bg }}>
-                        <span className="text-sm font-bold" style={{ color: avatar.text }}>{member.name[0]?.toUpperCase()}</span>
+                  <td className="px-2 py-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatar.bg }}>
+                        <span className="text-[10px] font-bold" style={{ color: avatar.text }}>{member.name[0]?.toUpperCase()}</span>
                       </div>
-                      <span className="text-white font-medium">{member.name}</span>
+                      <span className="text-white/90 font-medium">{member.name}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="text-xs font-mono">
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    <div className="font-mono">
                       <p className="text-white/50">{member.email || "—"}</p>
                       {member.alternateEmail && (
                         <p className="text-white/30">{member.alternateEmail}</p>
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-2 py-1.5 whitespace-nowrap">
                     <span className="text-white/50">{member.school || "—"}</span>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-2 py-1.5 whitespace-nowrap">
                     <span className="text-white/50">{member.grade || "—"}</span>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-2 py-1.5 whitespace-nowrap">
                     <span className="text-white/50">{member.acceptedDate || "—"}</span>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="flex gap-2">
-                      {canEdit && <Btn size="sm" variant="secondary" onClick={() => openEdit(member)}>Edit</Btn>}
-                      {canEdit && <Btn size="sm" variant="danger" onClick={() => ask(async () => deleteTeamMember(member.id))}>Delete</Btn>}
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    <div className="flex gap-1 flex-nowrap">
+                      {canEdit && <Btn size="sm" variant="secondary" className="!px-2 !py-0.5 !text-[10px] leading-none whitespace-nowrap" onClick={() => openEdit(member)}>Edit</Btn>}
+                      {canEdit && <Btn size="sm" variant="danger" className="!px-2 !py-0.5 !text-[10px] leading-none whitespace-nowrap" onClick={() => ask(async () => deleteTeamMember(member.id))}>Delete</Btn>}
                     </div>
                   </td>
                 </tr>
