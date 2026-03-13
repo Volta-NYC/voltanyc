@@ -56,6 +56,7 @@ function namesLikelyMatch(aRaw: string, bRaw: string): boolean {
 }
 
 function normalizeStatus(raw: string, flags: {
+  hasCompletedInterview: boolean;
   hasScheduledInterview: boolean;
   hasInviteSent: boolean;
   isAccepted: boolean;
@@ -71,6 +72,7 @@ function normalizeStatus(raw: string, flags: {
   }
   if (key === "not accepted" || key === "rejected") return "Not Accepted";
   if (flags.isAccepted) return "Accepted";
+  if (flags.hasCompletedInterview) return "Interview Completed";
   if (flags.hasScheduledInterview) return "Interview Scheduled";
   if (flags.hasInviteSent) return "Invited for Interview";
   if (key === "invited for interview" || key === "interview pending") return "Invited for Interview";
@@ -83,6 +85,7 @@ function normalizeApplication(
   id: string,
   row: ApplicationRow,
   options: {
+    hasCompletedInterview: boolean;
     hasScheduledInterview: boolean;
     hasInviteSent: boolean;
     isAccepted: boolean;
@@ -148,6 +151,7 @@ export async function GET(req: NextRequest) {
       const rowSlotId = readText(safeRow, ["interviewSlotId"]);
       const rowScheduledAt = readText(safeRow, ["interviewScheduledAt"]);
 
+      let hasPassedInterview = false;
       const hasMatchedBookedSlot = Object.values(slots).some((slot) => {
         const available = !!slot.available;
         if (available) return false;
@@ -155,9 +159,17 @@ export async function GET(req: NextRequest) {
         const slotEmail = String(slot.bookerEmail ?? "").trim();
         const slotCanonical = canonicalEmail(slotEmail);
         const slotName = String(slot.bookerName ?? "").trim();
-        if (appToken && bookedBy && appToken === bookedBy) return true;
-        if (appEmail && slotEmail && (normalize(appEmail) === normalize(slotEmail) || appCanonicalEmail === slotCanonical)) return true;
-        if (appName && slotName && namesLikelyMatch(appName, slotName)) return true;
+        let matched = false;
+        if (appToken && bookedBy && appToken === bookedBy) matched = true;
+        else if (appEmail && slotEmail && (normalize(appEmail) === normalize(slotEmail) || appCanonicalEmail === slotCanonical)) matched = true;
+        else if (appName && slotName && namesLikelyMatch(appName, slotName)) matched = true;
+        
+        if (matched) {
+          if (slot.datetime && new Date(String(slot.datetime)).getTime() < Date.now()) {
+            hasPassedInterview = true;
+          }
+          return true;
+        }
         return false;
       });
 
@@ -170,7 +182,10 @@ export async function GET(req: NextRequest) {
         return !!(appName && name && namesLikelyMatch(appName, name));
       });
 
+      const hasEvaluations = typeof safeRow.interviewEvaluations === "object" && safeRow.interviewEvaluations !== null && Object.keys(safeRow.interviewEvaluations).length > 0;
+      
       return normalizeApplication(id, safeRow, {
+        hasCompletedInterview: hasPassedInterview || hasEvaluations,
         hasScheduledInterview: !!(rowSlotId || rowScheduledAt || hasMatchedBookedSlot),
         hasInviteSent,
         isAccepted: isAcceptedFromTeam,

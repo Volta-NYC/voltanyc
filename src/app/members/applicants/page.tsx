@@ -164,8 +164,8 @@ const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "tracks", label: "Tracks" },
   { key: "resume", label: "Resume URL" },
   { key: "applied", label: "Applied" },
-  { key: "invite", label: "Invite" },
   { key: "interview", label: "Interview" },
+  { key: "invite", label: "Invite" },
   { key: "actions", label: "Actions" },
 ];
 
@@ -211,7 +211,7 @@ export default function ApplicantsPage() {
   const { authRole, user } = useAuth();
   const canEdit = authRole === "admin" || authRole === "project_lead";
   const canDelete = authRole === "admin";
-  const canManageStatus = authRole === "admin" || authRole === "interviewer";
+  const canManageStatus = canEdit;
   const canView = canEdit || authRole === "interviewer";
   const isInterviewerOnly = authRole === "interviewer" && !canEdit;
 

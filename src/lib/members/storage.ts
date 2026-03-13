@@ -380,7 +380,7 @@ function normalizeTimestamp(value: unknown, fallbackIso?: string): string {
   return fallbackIso ?? nowISO();
 }
 
-function normalizeApplicationStatus(raw: string, hasScheduledInterview: boolean): ApplicationStatus {
+function normalizeApplicationStatus(raw: string, hasScheduledInterview: boolean, hasCompletedInterview: boolean): ApplicationStatus {
   const key = raw.trim().toLowerCase();
   if (key === "new") return "New";
   if (key === "invited for interview") return "Invited for Interview";
@@ -388,6 +388,7 @@ function normalizeApplicationStatus(raw: string, hasScheduledInterview: boolean)
   if (key === "interview completed") return "Interview Completed";
   if (key === "accepted") return "Accepted";
   if (key === "not accepted" || key === "rejected") return "Not Accepted";
+  if (hasCompletedInterview) return "Interview Completed";
   if (hasScheduledInterview) return "Interview Scheduled";
   return "New";
 }
@@ -398,6 +399,11 @@ function normalizeApplicationRecord(id: string, row: Record<string, unknown>): A
   const interviewSlotId = readLegacyText(row, ["interviewSlotId"]);
   const interviewScheduledAt = readLegacyText(row, ["interviewScheduledAt"]);
   const hasScheduledInterview = !!(interviewSlotId || interviewScheduledAt);
+
+  const interviewEvaluations = (row.interviewEvaluations && typeof row.interviewEvaluations === "object")
+      ? (row.interviewEvaluations as ApplicationRecord["interviewEvaluations"])
+      : {};
+  const hasCompletedInterview = Object.keys(interviewEvaluations || {}).length > 0;
 
   return {
     id,
@@ -412,16 +418,14 @@ function normalizeApplicationRecord(id: string, row: Record<string, unknown>): A
     resumeUrl: readLegacyText(row, ["resumeUrl", "Resume URL"]),
     toolsSoftware: readLegacyText(row, ["toolsSoftware", "Tools/Software"]),
     accomplishment: readLegacyText(row, ["accomplishment", "Accomplishment"]),
-    status: normalizeApplicationStatus(readLegacyText(row, ["status"]), hasScheduledInterview),
+    status: normalizeApplicationStatus(readLegacyText(row, ["status"]), hasScheduledInterview, hasCompletedInterview),
     notes: readLegacyText(row, ["notes", "Notes"]),
     interviewInviteToken: readLegacyText(row, ["interviewInviteToken"]),
     interviewInviteSentAt: readLegacyText(row, ["interviewInviteSentAt"]),
     interviewReminderSentAt: readLegacyText(row, ["interviewReminderSentAt"]),
     interviewSlotId,
     interviewScheduledAt,
-    interviewEvaluations: (row.interviewEvaluations && typeof row.interviewEvaluations === "object")
-      ? (row.interviewEvaluations as ApplicationRecord["interviewEvaluations"])
-      : {},
+    interviewEvaluations,
     finalDecisionRole: readLegacyText(row, ["finalDecisionRole"]),
     source: (readLegacyText(row, ["source"]) as ApplicationRecord["source"]) || undefined,
     sourceTimestampRaw: readLegacyText(row, ["sourceTimestampRaw", "Timestamp"]),
