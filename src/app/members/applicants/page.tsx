@@ -29,7 +29,6 @@ const STATUS_BADGE_CLASS: Record<string, string> = {
   "Interview Scheduled": "bg-blue-500/20 text-blue-200 border border-blue-400/35",
   "Interview Completed": "bg-purple-500/20 text-purple-200 border border-purple-400/35",
   "Accepted": "bg-emerald-500/20 text-emerald-200 border border-emerald-400/35",
-  "Not Accepted": "bg-red-500/20 text-red-200 border border-red-400/35",
 };
 
 function normalize(v: string): string {

@@ -60,24 +60,20 @@ function normalizeStatus(raw: string, flags: {
   hasScheduledInterview: boolean;
   hasInviteSent: boolean;
   isAccepted: boolean;
-  manualOverride: boolean;
 }): string {
   const key = raw.trim().toLowerCase();
-  if (flags.manualOverride) {
-    if (key === "accepted") return "Accepted";
-    if (key === "interview scheduled") return "Interview Scheduled";
-    if (key === "invited for interview" || key === "interview pending") return "Invited for Interview";
-    if (key === "not accepted" || key === "rejected") return "Not Accepted";
-    return "New";
-  }
-  if (key === "not accepted" || key === "rejected") return "Not Accepted";
-  if (flags.isAccepted) return "Accepted";
+  // Accepted is always terminal — accept button or team membership wins
+  if (flags.isAccepted || key === "accepted") return "Accepted";
+  // Interview time passed or eval submitted → Completed
   if (flags.hasCompletedInterview) return "Interview Completed";
+  // Slot booked → Scheduled
   if (flags.hasScheduledInterview) return "Interview Scheduled";
+  // Invite email sent → Invited
   if (flags.hasInviteSent) return "Invited for Interview";
-  if (key === "invited for interview" || key === "interview pending") return "Invited for Interview";
+  // Explicit stored status (handles legacy records where status was set manually)
+  if (key === "interview completed") return "Interview Completed";
   if (key === "interview scheduled") return "Interview Scheduled";
-  if (key === "accepted") return "Accepted";
+  if (key === "invited for interview") return "Invited for Interview";
   return "New";
 }
 
@@ -89,7 +85,6 @@ function normalizeApplication(
     hasScheduledInterview: boolean;
     hasInviteSent: boolean;
     isAccepted: boolean;
-    manualOverride: boolean;
   },
 ) {
   const createdAt = normalizeTimestamp(row.createdAt ?? row.Timestamp);
@@ -188,8 +183,7 @@ export async function GET(req: NextRequest) {
         hasCompletedInterview: hasPassedInterview || hasEvaluations,
         hasScheduledInterview: !!(rowSlotId || rowScheduledAt || hasMatchedBookedSlot),
         hasInviteSent,
-        isAccepted: isAcceptedFromTeam,
-        manualOverride: !!safeRow.statusManualOverride,
+        isAccepted: isAcceptedFromTeam || normalizeKey(readText(safeRow, ["status"])) === "accepted",
       });
     })
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));

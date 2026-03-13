@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyCaller } from "@/lib/server/adminApi";
+import { verifyCaller, dbRead, dbPatch } from "@/lib/server/adminApi";
 import { createTransportForFrom, resolveFromWithName } from "@/lib/server/smtp";
 import { buildAcceptanceTemplate } from "@/lib/server/applicantEmails";
 
@@ -82,6 +82,27 @@ export async function POST(req: NextRequest) {
     text: content.text,
     html: content.html,
   });
+
+  // Write Accepted status to Firebase application record
+  try {
+    const appsData = await dbRead("applications", verified.caller.idToken);
+    if (appsData && typeof appsData === "object") {
+      const apps = appsData as Record<string, Record<string, unknown>>;
+      for (const [appId, row] of Object.entries(apps)) {
+        const rowEmail = String(row.email ?? "").trim().toLowerCase();
+        if (rowEmail === applicantEmail) {
+          await dbPatch(`applications/${appId}`, {
+            status: "Accepted",
+            statusManualOverride: true,
+            updatedAt: new Date().toISOString(),
+          }, verified.caller.idToken);
+          break;
+        }
+      }
+    }
+  } catch {
+    // Don't fail the request if Firebase write fails
+  }
 
   return NextResponse.json({ success: true });
 }
