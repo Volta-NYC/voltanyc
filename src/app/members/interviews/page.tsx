@@ -842,9 +842,11 @@ function InterviewsContent() {
   };
 
   const openEvaluation = (slot: InterviewSlot) => {
+    // Pre-populate from any existing eval by the current user
+    const existingEval = user?.uid ? slot.evaluationByUid?.[user.uid] : undefined;
     setEvaluationSlot(slot);
-    setEvaluationRating("Qualified");
-    setEvaluationComments("");
+    setEvaluationRating(existingEval?.rating ?? "Qualified");
+    setEvaluationComments(existingEval?.comments ?? "");
     setEvaluationMessage(null);
   };
 
@@ -1715,7 +1717,9 @@ function InterviewsContent() {
                         <td className="px-2 py-1.5 text-white/50 whitespace-nowrap">{slotInterviewers.length > 0 ? slotInterviewers.join(", ") : "—"}</td>
                         <td className="px-2 py-1.5">
                           {evalCount > 0 ? (
-                            <span className="text-[#85CC17] font-bold text-base leading-none" title="Evaluation submitted">✓</span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wider bg-[#85CC17]/15 text-[#C4F135] border border-[#85CC17]/25">
+                              <span className="w-1 h-1 rounded-full bg-[#C4F135] inline-block" />Eval
+                            </span>
                           ) : (
                             <span className="text-white/20">—</span>
                           )}
@@ -1807,7 +1811,9 @@ function InterviewsContent() {
                         <td className="px-2 py-1.5 text-white/50 whitespace-nowrap">{slotInterviewers.length > 0 ? slotInterviewers.join(", ") : "—"}</td>
                         <td className="px-2 py-1.5">
                           {evalCount > 0 ? (
-                            <span className="text-[#85CC17] font-bold text-base leading-none" title="Evaluation submitted">✓</span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wider bg-[#85CC17]/15 text-[#C4F135] border border-[#85CC17]/25">
+                              <span className="w-1 h-1 rounded-full bg-[#C4F135] inline-block" />Eval
+                            </span>
                           ) : (
                             <span className="text-white/20">—</span>
                           )}

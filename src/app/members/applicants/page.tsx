@@ -1102,10 +1102,10 @@ export default function ApplicantsPage() {
                             {hasEval ? (
                               <button
                                 onClick={() => setViewingEvaluationsApp(app)}
-                                className="text-[#85CC17] font-bold text-base leading-none hover:text-[#C4F135] transition-colors"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wider bg-[#85CC17]/15 text-[#C4F135] border border-[#85CC17]/25 hover:bg-[#85CC17]/25 transition-colors"
                                 title="Click to view evaluation"
                               >
-                                ✓
+                                <span className="w-1 h-1 rounded-full bg-[#C4F135] inline-block" />Eval
                               </button>
                             ) : (
                               <span className="text-white/20">—</span>
