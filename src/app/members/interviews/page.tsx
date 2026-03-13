@@ -312,6 +312,7 @@ function InterviewsContent() {
   const [finalizeRole, setFinalizeRole] = useState("Analyst");
   const [finalizeSendEmail, setFinalizeSendEmail] = useState(true);
   const [finalizing, setFinalizing] = useState(false);
+  const [viewingEvaluationsApp, setViewingEvaluationsApp] = useState<ApplicationRecord | null>(null);
 
   const [slotWeek, setSlotWeek] = useState(0);
   const [windowAnchor, setWindowAnchor] = useState(() => new Date());
@@ -1761,7 +1762,16 @@ function InterviewsContent() {
                         <td className="px-2 py-1.5 text-white/55 font-mono">{slot.bookerEmail || "—"}</td>
                         <td className="px-2 py-1.5 text-white/65 whitespace-nowrap">{formatDateTime(slot.datetime)}</td>
                         <td className="px-2 py-1.5 text-white/50 whitespace-nowrap">{slotInterviewers.length > 0 ? slotInterviewers.join(", ") : "—"}</td>
-                        <td className="px-2 py-1.5 text-white/45">{evalCount > 0 ? evalCount : "—"}</td>
+                        <td className="px-2 py-1.5 text-white/45">
+                          {evalCount > 0 ? (
+                            <button 
+                              onClick={() => setViewingEvaluationsApp(matchedApp)}
+                              className="hover:text-[#C4F135] transition-colors underline decoration-dotted"
+                            >
+                              {evalCount}
+                            </button>
+                          ) : "—"}
+                        </td>
                         <td className="px-2 py-1.5 whitespace-nowrap">
                           <div className="flex gap-1 flex-nowrap">
                             <Btn size="sm" variant="secondary" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => openEvaluation(slot)}>Evaluate</Btn>
@@ -2457,6 +2467,52 @@ function InterviewsContent() {
           <Btn variant="primary" onClick={() => void finalizeAcceptedFromSlot()} disabled={finalizing}>
             {finalizing ? "Finalizing..." : "Accept"}
           </Btn>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!viewingEvaluationsApp}
+        onClose={() => setViewingEvaluationsApp(null)}
+        title="Interview Evaluations"
+      >
+        <div className="space-y-4">
+          <p className="text-white/60 text-sm font-body">
+            Evaluations for <span className="text-white font-semibold">{viewingEvaluationsApp?.fullName}</span>
+          </p>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            {viewingEvaluationsApp && Object.values(viewingEvaluationsApp.interviewEvaluations || {}).length > 0 ? (
+              Object.values(viewingEvaluationsApp.interviewEvaluations || {})
+                .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())
+                .map((ev, idx) => (
+                  <div key={idx} className="bg-white/3 border border-white/5 rounded-lg p-3 space-y-2">
+                    <div className="flex justify-between items-start gap-2">
+                      <div>
+                        <div className="text-xs font-semibold text-white/90">{ev.interviewerName}</div>
+                        <div className="text-[10px] text-white/40">{ev.updatedAt ? formatDateTime(ev.updatedAt) : ""}</div>
+                      </div>
+                      <div className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                        ev.rating === "Extremely Qualified" ? "bg-[#85CC17]/20 text-[#C4F135]" :
+                        ev.rating === "Qualified" ? "bg-blue-500/20 text-blue-400" :
+                        ev.rating === "Decent" ? "bg-yellow-500/20 text-yellow-400" :
+                        "bg-red-500/20 text-red-400"
+                      }`}>
+                        {ev.rating || "No Rating"}
+                      </div>
+                    </div>
+                    {ev.comments && (
+                      <div className="text-sm text-white/70 whitespace-pre-wrap font-body bg-black/20 p-2 rounded border border-white/5 italic">
+                        "{ev.comments}"
+                      </div>
+                    )}
+                  </div>
+                ))
+            ) : (
+              <div className="text-center py-8 text-white/20 italic text-sm">No evaluations found.</div>
+            )}
+          </div>
+          <div className="flex justify-end pt-2">
+            <Btn variant="secondary" onClick={() => setViewingEvaluationsApp(null)}>Close</Btn>
+          </div>
         </div>
       </Modal>
     </>
