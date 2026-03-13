@@ -396,7 +396,7 @@ export async function POST(req: NextRequest) {
     }
     const zoom = resolveInterviewZoomSettings(settingsData, process.env.INTERVIEW_ZOOM_LINK ?? "");
     const interviewerContacts = resolveInterviewerContacts(slot, teamData);
-    const organizer = pickIcsOrganizer(interviewerContacts, process.env.INTERVIEW_EMAIL_FROM ?? "");
+    const organizer = pickIcsOrganizer(interviewerContacts, process.env.EMAIL_FROM ?? "");
     const payload = {
       to: cleanEmail,
       bookerName: cleanName,

@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
         .filter((value) => value && isValidEmail(value))
     )
   );
-  const defaultFrom = normalizeEmail(process.env.INTERVIEW_EMAIL_FROM ?? "");
+  const defaultFrom = normalizeEmail(process.env.EMAIL_FROM ?? "");
   const selectedFrom = requestedFrom || defaultFrom || allowedFrom[0] || "";
   if (!allowedFrom.includes(selectedFrom)) {
     return NextResponse.json({ error: "from_not_allowed" }, { status: 400 });

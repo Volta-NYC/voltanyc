@@ -18,7 +18,7 @@ function parsePort(value: string | undefined, fallback: number): number {
 }
 
 function getSecondaryFromSet(): Set<string> {
-  const raw = process.env.INTERVIEW_EMAIL_SECONDARY_FROM_ADDRESSES ?? "";
+  const raw = process.env.SMTP_SECONDARY_FROM_ADDRESSES ?? "";
   return new Set(
     raw
       .split(",")
@@ -40,16 +40,16 @@ export function resolveSmtpProfile(fromAddress?: string): {
   const wantsSecondary = normalizedFrom && secondaryFromSet.has(normalizedFrom);
 
   if (wantsSecondary) {
-    const user = process.env.INTERVIEW_EMAIL_SMTP_USER_SECONDARY ?? "";
-    const pass = process.env.INTERVIEW_EMAIL_SMTP_PASS_SECONDARY ?? "";
+    const user = process.env.SMTP_USER_SECONDARY ?? "";
+    const pass = process.env.SMTP_PASS_SECONDARY ?? "";
     if (!user || !pass) {
       throw new Error("secondary_smtp_not_configured");
     }
     return {
-      host: process.env.INTERVIEW_EMAIL_SMTP_HOST_SECONDARY ?? process.env.INTERVIEW_EMAIL_SMTP_HOST ?? "smtp.gmail.com",
-      port: parsePort(process.env.INTERVIEW_EMAIL_SMTP_PORT_SECONDARY ?? process.env.INTERVIEW_EMAIL_SMTP_PORT, 465),
+      host: process.env.SMTP_HOST_SECONDARY ?? process.env.SMTP_HOST ?? "smtp.gmail.com",
+      port: parsePort(process.env.SMTP_PORT_SECONDARY ?? process.env.SMTP_PORT, 465),
       secure: parseBool(
-        process.env.INTERVIEW_EMAIL_SMTP_SECURE_SECONDARY ?? process.env.INTERVIEW_EMAIL_SMTP_SECURE,
+        process.env.SMTP_SECURE_SECONDARY ?? process.env.SMTP_SECURE,
         true,
       ),
       user,
@@ -58,15 +58,15 @@ export function resolveSmtpProfile(fromAddress?: string): {
     };
   }
 
-  const user = process.env.INTERVIEW_EMAIL_SMTP_USER ?? "";
-  const pass = process.env.INTERVIEW_EMAIL_SMTP_PASS ?? "";
+  const user = process.env.SMTP_USER ?? "";
+  const pass = process.env.SMTP_PASS ?? "";
   if (!user || !pass) {
     throw new Error("primary_smtp_not_configured");
   }
   return {
-    host: process.env.INTERVIEW_EMAIL_SMTP_HOST ?? "smtp.gmail.com",
-    port: parsePort(process.env.INTERVIEW_EMAIL_SMTP_PORT, 465),
-    secure: parseBool(process.env.INTERVIEW_EMAIL_SMTP_SECURE, true),
+    host: process.env.SMTP_HOST ?? "smtp.gmail.com",
+    port: parsePort(process.env.SMTP_PORT, 465),
+    secure: parseBool(process.env.SMTP_SECURE, true),
     user,
     pass,
     usingSecondary: false,

@@ -188,7 +188,7 @@ export async function POST(req: NextRequest) {
 
   const zoom = resolveInterviewZoomSettings(settingsData, process.env.INTERVIEW_ZOOM_LINK ?? "");
   const interviewerContacts = resolveInterviewerContacts(toSlot, teamData);
-  const organizer = pickIcsOrganizer(interviewerContacts, process.env.INTERVIEW_EMAIL_FROM ?? "");
+  const organizer = pickIcsOrganizer(interviewerContacts, process.env.EMAIL_FROM ?? "");
   const durationMinutes = Number(toSlot.durationMinutes ?? 30);
   const location = typeof toSlot.location === "string" ? toSlot.location : "";
   if (fromEmail && fromDatetime && toDatetime) {

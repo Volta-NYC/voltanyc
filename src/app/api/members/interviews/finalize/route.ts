@@ -66,11 +66,11 @@ async function sendAcceptanceEmail(input: {
         .filter(Boolean)
     )
   );
-  const defaultFrom = normalizeEmail(process.env.INTERVIEW_EMAIL_FROM ?? "");
+  const defaultFrom = normalizeEmail(process.env.EMAIL_FROM ?? "");
   const from = normalizeEmail(input.fromAddress ?? "") || defaultFrom || allowedFrom[0] || "";
   if (!from || !allowedFrom.includes(from)) return;
   const transporter = createTransportForFrom(from).transporter;
-  const replyTo = process.env.INTERVIEW_EMAIL_REPLY_TO ?? from;
+  const replyTo = process.env.EMAIL_REPLY_TO ?? from;
   const signupLink = process.env.MEMBER_SIGNUP_LINK || "https://voltanyc.org/members/signup?code=VOLTA-8J3UMP";
   const tpl = buildAcceptanceTemplate({
     name: input.applicantName,

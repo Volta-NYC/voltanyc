@@ -44,7 +44,7 @@ function buildIcs(input: BookingEmailInput): string {
   const descParts: string[] = [];
   if (input.zoomLink) descParts.push(`Join Zoom: ${input.zoomLink}`);
   const organizerName = (input.organizerName || "Volta NYC").trim();
-  const organizerEmail = sanitizeEmailAddress(input.organizerEmail || process.env.INTERVIEW_EMAIL_FROM || "");
+  const organizerEmail = sanitizeEmailAddress(input.organizerEmail || process.env.EMAIL_FROM || "");
   descParts.push(`Interviewer: ${organizerName}`);
   descParts.push("Organized by Volta NYC");
 
@@ -102,13 +102,13 @@ async function sendInterviewEmail(input: {
   html: string;
   ics?: { filename: string; content: string };
 }): Promise<void> {
-  const configuredFrom = process.env.INTERVIEW_EMAIL_FROM ?? "";
+  const configuredFrom = process.env.EMAIL_FROM ?? "";
   if (!configuredFrom.trim()) {
     throw new Error("interview_email_from_not_configured");
   }
   const { transporter } = createTransportForFrom(configuredFrom);
   const from = configuredFrom;
-  const replyTo = process.env.INTERVIEW_EMAIL_REPLY_TO ?? from;
+  const replyTo = process.env.EMAIL_REPLY_TO ?? from;
 
   await transporter.sendMail({
     from,

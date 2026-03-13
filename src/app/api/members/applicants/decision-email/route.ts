@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
         .filter(Boolean)
     )
   );
-  const defaultFrom = normalizeEmail(process.env.INTERVIEW_EMAIL_FROM ?? "");
+  const defaultFrom = normalizeEmail(process.env.EMAIL_FROM ?? "");
   const from = requestedFrom || defaultFrom || allowedFrom[0] || "";
   if (!from || !allowedFrom.includes(from)) {
     return NextResponse.json({ error: "from_not_allowed" }, { status: 400 });
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "smtp_not_configured" }, { status: 500 });
   }
-  const replyTo = process.env.INTERVIEW_EMAIL_REPLY_TO ?? from;
+  const replyTo = process.env.EMAIL_REPLY_TO ?? from;
   const content = buildMessage(applicantName, decision, notes, role, tracks);
 
   await transporter.sendMail({
