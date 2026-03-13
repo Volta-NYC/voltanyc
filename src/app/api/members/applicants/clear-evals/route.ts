@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   // Also clear the interviewSlots side
   const slotsData = await dbRead("interviewSlots", verified.caller.idToken);
   const slots = (slotsData ?? {}) as Record<string, Record<string, unknown>>;
-  for (const slotId of slotIdsToClear) {
+  for (const slotId of Array.from(slotIdsToClear)) {
     const slot = slots[slotId];
     if (!slot?.evaluationByUid) continue;
     await dbPatch(`interviewSlots/${slotId}`, { evaluationByUid: null }, verified.caller.idToken);
