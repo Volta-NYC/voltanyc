@@ -6,6 +6,7 @@ type SendBody = {
   fromAddress?: string;
   subject?: string;
   message?: string;
+  contentMode?: "plain" | "html";
   recipients?: string[];
 };
 
@@ -17,6 +18,15 @@ function isValidEmail(email: string): boolean {
   return /\S+@\S+\.\S+/.test(email);
 }
 
+function stripHtml(input: string): string {
+  return input
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export async function POST(req: NextRequest) {
   const verified = await verifyCaller(req, ["admin", "project_lead"]);
   if (!verified.ok) return NextResponse.json({ error: verified.error }, { status: verified.status });
@@ -25,6 +35,7 @@ export async function POST(req: NextRequest) {
   const requestedFrom = normalizeEmail(String(body.fromAddress ?? ""));
   const subject = (body.subject ?? "").trim();
   const message = (body.message ?? "").trim();
+  const contentMode: "plain" | "html" = body.contentMode === "html" ? "html" : "plain";
   const incoming = Array.isArray(body.recipients) ? body.recipients : [];
 
   if (!subject || !message) {
@@ -70,13 +81,12 @@ export async function POST(req: NextRequest) {
   const fromName = (process.env.TEAM_EMAIL_FROM_NAME ?? "Volta NYC").trim();
   const from = `${fromName} <${selectedFrom}>`;
   const replyTo = selectedFrom;
-
-  const senderName = (verified.caller.name || verified.caller.email || "Volta NYC").trim();
-  const html = `
-    <p>Hi,</p>
-    <p>${message.replace(/\n/g, "<br/>")}</p>
-    <p>Best,<br/>${senderName}</p>
-  `;
+  const textBody = contentMode === "html"
+    ? stripHtml(message)
+    : message;
+  const htmlBody = contentMode === "html"
+    ? message
+    : message.replace(/\n/g, "<br/>");
 
   const failed: string[] = [];
   for (const recipient of deduped) {
@@ -87,8 +97,8 @@ export async function POST(req: NextRequest) {
         replyTo,
         to: recipient,
         subject,
-        text: `Hi,\n\n${message}\n\nBest,\n${senderName}`,
-        html,
+        text: textBody,
+        html: htmlBody,
       });
     } catch {
       failed.push(recipient);

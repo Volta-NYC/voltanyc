@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MembersLayout from "@/components/members/MembersLayout";
 import {
-  Btn, Empty, PageHeader, SearchBar, useConfirm,
+  Btn, Empty, Modal, Field, PageHeader, SearchBar, useConfirm,
 } from "@/components/members/ui";
 import {
   type ApplicationRecord,
   type ApplicationStatus,
   type InterviewSlot,
+  type TeamMember,
+  subscribeTeam,
+  subscribeInterviewSlots,
 } from "@/lib/members/storage";
 import { useAuth } from "@/lib/members/authContext";
 
@@ -145,18 +148,76 @@ function formatDateTime(value: string): string {
   });
 }
 
+// ── Sort arrow component ───────────────────────────────────────────────────────
+
+function SortArrows({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
+  return (
+    <span className="inline-flex flex-col ml-1 -space-y-[3px] leading-none align-middle">
+      <span className={`text-[8px] ${active && dir === "asc" ? "text-white/80" : "text-white/20"}`}>▲</span>
+      <span className={`text-[8px] ${active && dir === "desc" ? "text-white/80" : "text-white/20"}`}>▼</span>
+    </span>
+  );
+}
+
+// ── Column definitions ─────────────────────────────────────────────────────────
+
+type ColumnKey = "status" | "name" | "email" | "school" | "cityState" | "referral" | "tracks" | "resume" | "applied" | "invite" | "interview" | "actions";
+
+const ALL_COLUMNS: { key: ColumnKey; label: string; sortable: boolean }[] = [
+  { key: "status", label: "Status", sortable: true },
+  { key: "name", label: "Name", sortable: true },
+  { key: "email", label: "Email", sortable: true },
+  { key: "school", label: "School Name", sortable: false },
+  { key: "cityState", label: "City, State", sortable: false },
+  { key: "referral", label: "How They Heard", sortable: false },
+  { key: "tracks", label: "Tracks", sortable: false },
+  { key: "resume", label: "Resume URL", sortable: false },
+  { key: "applied", label: "Applied", sortable: true },
+  { key: "invite", label: "Invite", sortable: false },
+  { key: "interview", label: "Interview", sortable: false },
+  { key: "actions", label: "Actions", sortable: false },
+];
+
+// ── Column widths (tailwind-compatible) ────────────────────────────────────────
+
+const COLUMN_WIDTH: Partial<Record<ColumnKey, string>> = {
+  status: "w-[130px]",
+  name: "w-[120px]",
+  email: "min-w-[260px]",
+  school: "w-[140px]",
+  cityState: "w-[100px]",
+  referral: "w-[100px]",
+  tracks: "w-[90px]",
+  resume: "w-[70px]",
+  applied: "w-[110px]",
+  invite: "w-[130px]",
+  interview: "w-[130px]",
+  actions: "w-[160px]",
+};
+
+type SortKey = "status" | "name" | "email" | "applied";
+
 export default function ApplicantsPage() {
   const [applications, setApplications] = useState<ApplicationRecord[]>([]);
   const [slots, setSlots] = useState<InterviewSlot[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [search, setSearch] = useState("");
   const [showAcceptedApplicants, setShowAcceptedApplicants] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectionMode, setSelectionMode] = useState<"none" | "invite" | "accept">("none");
   const [importing, setImporting] = useState(false);
   const [sendingInvites, setSendingInvites] = useState(false);
   const [sendingReminders, setSendingReminders] = useState(false);
   const [bulkPromoting, setBulkPromoting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("applied");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [hiddenColumns, setHiddenColumns] = useState<Set<ColumnKey>>(new Set());
+  // Accept modal state
+  const [acceptModalApp, setAcceptModalApp] = useState<ApplicationRecord | null>(null);
+  const [acceptRole, setAcceptRole] = useState("Analyst");
+  const [acceptSendEmail, setAcceptSendEmail] = useState(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { ask, Dialog } = useConfirm();
   const { authRole, user } = useAuth();
@@ -164,6 +225,33 @@ export default function ApplicantsPage() {
   const canDelete = authRole === "admin";
   const canManageStatus = authRole === "admin" || authRole === "interviewer";
   const canView = canEdit || authRole === "interviewer";
+  const isInterviewerOnly = authRole === "interviewer" && !canEdit;
+
+  // Subscribe to team members for interviewer identity resolution
+  useEffect(() => subscribeTeam(setTeamMembers), []);
+
+  // Subscribe to interview slots for resume access control
+  useEffect(() => subscribeInterviewSlots(setSlots), []);
+
+  // Resolve the current user's team member IDs
+  const currentInterviewerMemberIds = useMemo(() => {
+    if (!user) return [] as string[];
+    const email = normalize(user.email ?? "");
+    const canonical = canonicalEmail(user.email ?? "");
+    const displayName = normalizeName(user.displayName ?? "");
+    return teamMembers
+      .filter((member) => {
+        const memberEmail = normalize(member.email ?? "");
+        const memberAltEmail = normalize(member.alternateEmail ?? "");
+        const memberCanonical = canonicalEmail(member.email ?? "");
+        const memberAltCanonical = canonicalEmail(member.alternateEmail ?? "");
+        if (email && (memberEmail === email || memberAltEmail === email || memberCanonical === canonical || memberAltCanonical === canonical)) return true;
+        if (displayName && namesLikelyMatch(displayName, member.name ?? "")) return true;
+        return false;
+      })
+      .map((member) => String(member.id ?? "").trim())
+      .filter(Boolean);
+  }, [teamMembers, user]);
 
   const fetchApplicantsData = useCallback(async () => {
     if (!user || !canView) {
@@ -182,10 +270,6 @@ export default function ApplicantsPage() {
         slots?: Record<string, InterviewSlot>;
       };
       setApplications(Array.isArray(payload.applications) ? payload.applications : []);
-      const slotRows = payload.slots && typeof payload.slots === "object"
-        ? Object.entries(payload.slots).map(([id, row]) => ({ ...(row as InterviewSlot), id }))
-        : [];
-      setSlots(slotRows);
     } catch {
       setStatusMessage("Could not load applicants from server.");
     } finally {
@@ -226,9 +310,35 @@ export default function ApplicantsPage() {
     });
   }, [bookedSlots]);
 
+  // Check if the current interviewer can view the resume for a specific applicant
+  const canViewResumeForApp = useCallback((app: ApplicationRecord): boolean => {
+    // Admins and project leads can view all resumes
+    if (canEdit) return true;
+    // Interviewers can only view resumes of applicants who booked in their assigned slots
+    if (isInterviewerOnly) {
+      const bookedSlot = matchBookedSlot(app);
+      if (!bookedSlot) return false;
+      const slotInterviewerIds = Array.isArray(bookedSlot.interviewerMemberIds)
+        ? bookedSlot.interviewerMemberIds.map((v) => String(v ?? "").trim()).filter(Boolean)
+        : [];
+      if (slotInterviewerIds.length === 0 || currentInterviewerMemberIds.length === 0) return false;
+      return slotInterviewerIds.some((id) => currentInterviewerMemberIds.includes(id));
+    }
+    return false;
+  }, [canEdit, isInterviewerOnly, matchBookedSlot, currentInterviewerMemberIds]);
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
   const filtered = useMemo(() => {
     const q = normalize(search);
-    return [...applications]
+    const base = [...applications]
       .filter((app) => {
         if (!showAcceptedApplicants && normalize(app.status) === "accepted") return false;
         if (!q) return true;
@@ -236,9 +346,30 @@ export default function ApplicantsPage() {
           || normalize(app.email).includes(q)
           || normalize(app.schoolName ?? "").includes(q)
           || normalize(app.status).includes(q);
-      })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [applications, search, showAcceptedApplicants]);
+      });
+    // Sort
+    base.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case "status":
+          cmp = a.status.localeCompare(b.status);
+          break;
+        case "name":
+          cmp = a.fullName.localeCompare(b.fullName);
+          break;
+        case "email":
+          cmp = a.email.localeCompare(b.email);
+          break;
+        case "applied":
+          cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+        default:
+          cmp = 0;
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return base;
+  }, [applications, search, showAcceptedApplicants, sortKey, sortDir]);
 
   const uninvitedApplicantIds = useMemo(
     () =>
@@ -357,6 +488,8 @@ export default function ApplicantsPage() {
       const result = await sendInterviewInviteEmails(selectedIds, "initial", false);
       setStatusMessage(`Invite selected result — sent: ${result.sent}, skipped: ${result.skipped}, failed: ${result.failed}.`);
       await fetchApplicantsData();
+      setSelectionMode("none");
+      setSelectedIds([]);
     } catch {
       setStatusMessage("Could not send invite emails to selected applicants.");
     } finally {
@@ -364,11 +497,12 @@ export default function ApplicantsPage() {
     }
   };
 
-  const promoteApplicant = async (app: ApplicationRecord, shouldEmail: boolean) => {
+  const promoteApplicant = async (app: ApplicationRecord, shouldEmail: boolean, role: string) => {
     if (!user) throw new Error("not_authenticated");
     const token = await user.getIdToken();
     await updateApplicantServer(app.id, {
       status: "Accepted",
+      finalDecisionRole: role,
     });
     await fetch("/api/members/applicants/promote", {
       method: "POST",
@@ -395,10 +529,25 @@ export default function ApplicantsPage() {
           applicantEmail: app.email,
           decision: "Accepted",
           notes: "",
-          role: app.finalDecisionRole || "Analyst",
+          role: role,
           tracks: app.tracksSelected || "",
         }),
       });
+    }
+  };
+
+  const handleAcceptFromModal = async () => {
+    if (!acceptModalApp) return;
+    setBulkPromoting(true);
+    try {
+      await promoteApplicant(acceptModalApp, acceptSendEmail, acceptRole);
+      setStatusMessage(`Accepted and added ${acceptModalApp.fullName} to member directory.`);
+      await fetchApplicantsData();
+      setAcceptModalApp(null);
+    } catch {
+      setStatusMessage(`Could not promote ${acceptModalApp.fullName}.`);
+    } finally {
+      setBulkPromoting(false);
     }
   };
 
@@ -415,13 +564,14 @@ export default function ApplicantsPage() {
       for (const app of selectedApps) {
         try {
           // eslint-disable-next-line no-await-in-loop
-          await promoteApplicant(app, true);
+          await promoteApplicant(app, true, "Analyst");
           ok += 1;
         } catch {
           failed += 1;
         }
       }
       setSelectedIds([]);
+      setSelectionMode("none");
       setStatusMessage(`Accept selected complete — ${ok} succeeded, ${failed} failed.`);
       await fetchApplicantsData();
     } finally {
@@ -647,9 +797,80 @@ export default function ApplicantsPage() {
     e.target.value = "";
   };
 
+  const visibleColumns = ALL_COLUMNS.filter((col) => !hiddenColumns.has(col.key));
+
+  const hideColumn = (key: ColumnKey) => {
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+  };
+
+  const showColumn = (key: ColumnKey) => {
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  };
+
+  const enterSelectionMode = (mode: "invite" | "accept") => {
+    setSelectionMode(mode);
+    setSelectedIds([]);
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode("none");
+    setSelectedIds([]);
+  };
+
   return (
     <MembersLayout>
       <Dialog />
+
+      {/* Accept modal */}
+      <Modal
+        open={!!acceptModalApp}
+        onClose={() => {
+          if (bulkPromoting) return;
+          setAcceptModalApp(null);
+        }}
+        title="Accept Applicant"
+      >
+        <div className="space-y-3">
+          <p className="text-white/60 text-sm font-body">
+            {acceptModalApp ? `${acceptModalApp.fullName} · ${acceptModalApp.email}` : ""}
+          </p>
+          <Field label="Team Role">
+            <select
+              value={acceptRole}
+              onChange={(e) => setAcceptRole(e.target.value)}
+              className="w-full bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#85CC17]/45"
+            >
+              {["Analyst", "Senior Analyst", "Associate", "Senior Associate", "Project Lead"].map((role) => (
+                <option key={role} value={role}>{role}</option>
+              ))}
+            </select>
+          </Field>
+          <label className="inline-flex items-center gap-2 text-sm text-white/65">
+            <input
+              type="checkbox"
+              checked={acceptSendEmail}
+              onChange={(e) => setAcceptSendEmail(e.target.checked)}
+              className="accent-[#85CC17]"
+            />
+            Send acceptance email
+          </label>
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <Btn variant="ghost" onClick={() => setAcceptModalApp(null)} disabled={bulkPromoting}>Cancel</Btn>
+          <Btn variant="primary" onClick={() => void handleAcceptFromModal()} disabled={bulkPromoting}>
+            {bulkPromoting ? "Accepting..." : "Accept"}
+          </Btn>
+        </div>
+      </Modal>
+
       <input
         ref={fileInputRef}
         type="file"
@@ -702,34 +923,81 @@ export default function ApplicantsPage() {
           />
           Show accepted applicants
         </label>
-        {canEdit && (
+        {canEdit && selectionMode === "none" && (
           <>
             <Btn
               size="sm"
               variant="secondary"
-              onClick={inviteSelected}
-              disabled={sendingInvites || selectedIds.length === 0}
+              onClick={() => enterSelectionMode("invite")}
             >
-              Invite Selected ({selectedIds.length})
+              Invite Multiple
             </Btn>
             <Btn
               size="sm"
               variant="primary"
-              onClick={skipInterviewForSelected}
-              disabled={bulkPromoting || selectedIds.length === 0}
+              onClick={() => enterSelectionMode("accept")}
             >
-              {bulkPromoting ? "Processing..." : "Accept Selected"}
+              Accept Multiple
             </Btn>
           </>
+        )}
+        {canEdit && selectionMode !== "none" && (
+          <>
+            <span className="text-xs text-white/55">{selectedIds.length} selected</span>
+            {selectionMode === "invite" && (
+              <Btn
+                size="sm"
+                variant="secondary"
+                onClick={inviteSelected}
+                disabled={sendingInvites || selectedIds.length === 0}
+              >
+                {sendingInvites ? "Sending..." : `Send Invites (${selectedIds.length})`}
+              </Btn>
+            )}
+            {selectionMode === "accept" && (
+              <Btn
+                size="sm"
+                variant="primary"
+                onClick={skipInterviewForSelected}
+                disabled={bulkPromoting || selectedIds.length === 0}
+              >
+                {bulkPromoting ? "Processing..." : `Accept (${selectedIds.length})`}
+              </Btn>
+            )}
+            <Btn size="sm" variant="ghost" onClick={exitSelectionMode}>
+              Cancel
+            </Btn>
+          </>
+        )}
+        {hiddenColumns.size > 0 && (
+          <div className="relative group">
+            <Btn size="sm" variant="ghost">
+              Show Columns ({hiddenColumns.size})
+            </Btn>
+            <div className="absolute top-full left-0 mt-1 bg-[#1C1F26] border border-white/10 rounded-lg shadow-xl z-50 py-1 hidden group-hover:block min-w-[140px]">
+              {Array.from(hiddenColumns).map((key) => {
+                const col = ALL_COLUMNS.find((c) => c.key === key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => showColumn(key)}
+                    className="w-full text-left px-3 py-1.5 text-xs text-white/65 hover:bg-white/8 hover:text-white transition-colors"
+                  >
+                    + {col?.label ?? key}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
 
       <div className="bg-[#1C1F26] border border-white/8 rounded-xl overflow-x-auto">
-        <table className="w-full min-w-[1500px] text-[11px] leading-4 table-fixed">
+        <table className="w-full text-[11px] leading-4">
           <thead className="bg-[#0F1014] border-b border-white/8">
             <tr>
-              {canEdit && (
-                <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-white/45">
+              {selectionMode !== "none" && (
+                <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-white/45 w-[32px]">
                   <input
                     type="checkbox"
                     className="accent-[#85CC17]"
@@ -741,9 +1009,34 @@ export default function ApplicantsPage() {
                   />
                 </th>
               )}
-              {["Status", "Name", "Email", "School Name", "City, State", "How They Heard", "Tracks", "Resume URL", "Applied", "Invite", "Interview", "Actions"].map((col) => (
-                <th key={col} className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-white/45 whitespace-nowrap">{col}</th>
-              ))}
+              {visibleColumns.map((col) => {
+                const isSortable = col.sortable;
+                const isActive = sortKey === col.key;
+                return (
+                  <th
+                    key={col.key}
+                    className={`px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-white/45 whitespace-nowrap ${COLUMN_WIDTH[col.key] ?? ""} ${isSortable ? "cursor-pointer select-none hover:text-white/65" : ""} group/col`}
+                    onClick={() => isSortable && handleSort(col.key as SortKey)}
+                  >
+                    <span className="inline-flex items-center gap-0.5">
+                      {col.label}
+                      {isSortable && <SortArrows active={isActive} dir={sortDir} />}
+                      {col.key !== "actions" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            hideColumn(col.key);
+                          }}
+                          className="ml-1 text-[9px] text-white/0 group-hover/col:text-white/30 hover:!text-white/60 transition-colors"
+                          title={`Hide ${col.label}`}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </span>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
@@ -753,9 +1046,10 @@ export default function ApplicantsPage() {
               const bookedAt = latestInterview ? Date.parse(latestInterview.datetime) : NaN;
               const bookedAfterInvite = Number.isFinite(inviteSentAt) && Number.isFinite(bookedAt) && bookedAt >= inviteSentAt;
               const evalCount = Object.keys((app.interviewEvaluations ?? {}) as Record<string, unknown>).length;
+              const showResume = canViewResumeForApp(app);
               return (
                 <tr key={app.id} className="hover:bg-white/3 transition-colors">
-                  {canEdit && (
+                  {selectionMode !== "none" && (
                     <td className="px-2 py-1.5">
                       <input
                         type="checkbox"
@@ -768,137 +1062,172 @@ export default function ApplicantsPage() {
                       />
                     </td>
                   )}
-                  <td className="px-2 py-1.5">
-                    {canManageStatus ? (
-                      <select
-                        value={STATUS_OPTIONS.includes(app.status) ? app.status : "New"}
-                        onChange={(e) => void updateRowStatus(app, e.target.value as ApplicationStatus)}
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold focus:outline-none ${STATUS_BADGE_CLASS[app.status] ?? STATUS_BADGE_CLASS["New"]}`}
-                      >
-                        {STATUS_OPTIONS.map((status) => (
-                          <option key={status} value={status}>{status}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_BADGE_CLASS[app.status] ?? STATUS_BADGE_CLASS["New"]}`}>
-                        {app.status}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-2 py-1.5 text-white/85 whitespace-nowrap">
-                    <span className="block truncate" title={app.fullName}>{app.fullName}</span>
-                  </td>
-                  <td className="px-2 py-1.5 text-white/60 font-mono whitespace-nowrap">
-                    <span className="block truncate" title={app.email}>{app.email}</span>
-                  </td>
-                  <td className="px-2 py-1.5 text-white/55 whitespace-nowrap">
-                    <span className="block truncate" title={app.schoolName || ""}>{app.schoolName || "—"}</span>
-                  </td>
-                  <td className="px-2 py-1.5 text-white/50 whitespace-nowrap">
-                    <span className="block truncate" title={app.cityState || ""}>{app.cityState || "—"}</span>
-                  </td>
-                  <td className="px-2 py-1.5 text-white/50 whitespace-nowrap">
-                    <span className="block truncate" title={app.referral || ""}>{app.referral || "—"}</span>
-                  </td>
-                  <td className="px-2 py-1.5 text-white/50 whitespace-nowrap">
-                    <span className="block truncate" title={app.tracksSelected || ""}>{app.tracksSelected || "—"}</span>
-                  </td>
-                  <td className="px-2 py-1.5">
-                    {app.resumeUrl ? (
-                      <a
-                        href={app.resumeUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[#85CC17]/80 hover:text-[#85CC17] underline whitespace-nowrap"
-                      >
-                        Open
-                      </a>
-                    ) : (
-                      <span className="text-white/30">—</span>
-                    )}
-                  </td>
-                  <td className="px-2 py-1.5 text-white/45 whitespace-nowrap">{formatDateTime(app.createdAt)}</td>
-                  <td className="px-2 py-1.5">
-                    {app.interviewInviteSentAt ? (
-                      <div className="text-white/65">
-                        <div className="whitespace-nowrap">{formatDateTime(app.interviewInviteSentAt)}</div>
-                        {app.interviewReminderSentAt ? (
-                          <div className="text-[10px] text-white/40 mt-0.5 whitespace-nowrap">Reminder: {formatDateTime(app.interviewReminderSentAt)}</div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <span className="text-white/30">Not sent</span>
-                    )}
-                  </td>
-                  <td className="px-2 py-1.5">
-                    {latestInterview ? (
-                      <div className="text-white/65">
-                        <div className="whitespace-nowrap">{formatDateTime(latestInterview.datetime)}</div>
-                        {bookedAfterInvite ? (
-                          <div className="text-[10px] text-emerald-300 mt-0.5">Booked after invite</div>
-                        ) : null}
-                        {evalCount > 0 ? (
-                          <div className="text-[10px] text-white/40 mt-0.5">{evalCount} evaluation{evalCount > 1 ? "s" : ""}</div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <span className="text-white/30">Not booked</span>
-                    )}
-                  </td>
-                  <td className="px-2 py-1.5 whitespace-nowrap">
-                    <div className="flex gap-1 flex-nowrap">
-                      {canEdit && (
-                        <>
-                          <Btn
-                            size="sm"
-                            variant="secondary"
-                            className="!px-2 !py-0.5 !text-[10px] leading-none whitespace-nowrap"
-                            onClick={() => sendInviteForApplicant(app)}
-                            disabled={sendingInvites || sendingReminders}
-                          >
-                            {app.interviewInviteSentAt ? "Resend Invite" : "Send Invite"}
-                          </Btn>
-                          <Btn
-                            size="sm"
-                            variant="primary"
-                            className="!px-2 !py-0.5 !text-[10px] leading-none whitespace-nowrap"
-                            onClick={async () => {
-                              setBulkPromoting(true);
-                              try {
-                                await promoteApplicant(app, true);
-                                setStatusMessage(`Accepted and added ${app.fullName} to member directory.`);
-                                await fetchApplicantsData();
-                              } catch {
-                                setStatusMessage(`Could not promote ${app.fullName}.`);
-                              } finally {
-                                setBulkPromoting(false);
-                              }
-                            }}
-                            disabled={bulkPromoting}
-                          >
-                            Accept
-                          </Btn>
-                          {canDelete && (
-                            <Btn
-                              size="sm"
-                              variant="danger"
-                              className="!px-2 !py-0.5 !text-[10px] leading-none whitespace-nowrap"
-                              onClick={() => {
-                                void ask(
-                                  async () => {
-                                    await deleteApplicant(app);
-                                  },
-                                  `Delete ${app.fullName}? This will permanently remove them from /members/applicants.`
-                                );
-                              }}
-                            >
-                              Delete
-                            </Btn>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </td>
+                  {visibleColumns.map((col) => {
+                    switch (col.key) {
+                      case "status":
+                        return (
+                          <td key={col.key} className="px-2 py-1.5">
+                            {canManageStatus ? (
+                              <select
+                                value={STATUS_OPTIONS.includes(app.status) ? app.status : "New"}
+                                onChange={(e) => void updateRowStatus(app, e.target.value as ApplicationStatus)}
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold focus:outline-none ${STATUS_BADGE_CLASS[app.status] ?? STATUS_BADGE_CLASS["New"]}`}
+                              >
+                                {STATUS_OPTIONS.map((status) => (
+                                  <option key={status} value={status}>{status}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_BADGE_CLASS[app.status] ?? STATUS_BADGE_CLASS["New"]}`}>
+                                {app.status}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      case "name":
+                        return (
+                          <td key={col.key} className="px-2 py-1.5 text-white/85">
+                            <span className="block truncate" title={app.fullName}>{app.fullName}</span>
+                          </td>
+                        );
+                      case "email":
+                        return (
+                          <td key={col.key} className="px-2 py-1.5 text-white/60 font-mono">
+                            <span className="block break-all" title={app.email}>{app.email}</span>
+                          </td>
+                        );
+                      case "school":
+                        return (
+                          <td key={col.key} className="px-2 py-1.5 text-white/55 whitespace-nowrap">
+                            <span className="block truncate" title={app.schoolName || ""}>{app.schoolName || "—"}</span>
+                          </td>
+                        );
+                      case "cityState":
+                        return (
+                          <td key={col.key} className="px-2 py-1.5 text-white/50 whitespace-nowrap">
+                            <span className="block truncate" title={app.cityState || ""}>{app.cityState || "—"}</span>
+                          </td>
+                        );
+                      case "referral":
+                        return (
+                          <td key={col.key} className="px-2 py-1.5 text-white/50 whitespace-nowrap">
+                            <span className="block truncate" title={app.referral || ""}>{app.referral || "—"}</span>
+                          </td>
+                        );
+                      case "tracks":
+                        return (
+                          <td key={col.key} className="px-2 py-1.5 text-white/50 whitespace-nowrap">
+                            <span className="block truncate" title={app.tracksSelected || ""}>{app.tracksSelected || "—"}</span>
+                          </td>
+                        );
+                      case "resume":
+                        return (
+                          <td key={col.key} className="px-2 py-1.5">
+                            {app.resumeUrl && showResume ? (
+                              <a
+                                href={app.resumeUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[#85CC17]/80 hover:text-[#85CC17] underline whitespace-nowrap"
+                              >
+                                Open
+                              </a>
+                            ) : (
+                              <span className="text-white/30">—</span>
+                            )}
+                          </td>
+                        );
+                      case "applied":
+                        return (
+                          <td key={col.key} className="px-2 py-1.5 text-white/45 whitespace-nowrap">{formatDateTime(app.createdAt)}</td>
+                        );
+                      case "invite":
+                        return (
+                          <td key={col.key} className="px-2 py-1.5">
+                            {app.interviewInviteSentAt ? (
+                              <div className="text-white/65">
+                                <div className="whitespace-nowrap">{formatDateTime(app.interviewInviteSentAt)}</div>
+                                {app.interviewReminderSentAt ? (
+                                  <div className="text-[10px] text-white/40 mt-0.5 whitespace-nowrap">Reminder: {formatDateTime(app.interviewReminderSentAt)}</div>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <span className="text-white/30">Not sent</span>
+                            )}
+                          </td>
+                        );
+                      case "interview":
+                        return (
+                          <td key={col.key} className="px-2 py-1.5">
+                            {latestInterview ? (
+                              <div className="text-white/65">
+                                <div className="whitespace-nowrap">{formatDateTime(latestInterview.datetime)}</div>
+                                {bookedAfterInvite ? (
+                                  <div className="text-[10px] text-emerald-300 mt-0.5">Booked after invite</div>
+                                ) : null}
+                                {evalCount > 0 ? (
+                                  <div className="text-[10px] text-white/40 mt-0.5">{evalCount} evaluation{evalCount > 1 ? "s" : ""}</div>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <span className="text-white/30">Not booked</span>
+                            )}
+                          </td>
+                        );
+                      case "actions":
+                        return (
+                          <td key={col.key} className="px-2 py-1.5 whitespace-nowrap">
+                            <div className="flex gap-1 flex-nowrap">
+                              {canEdit && (
+                                <>
+                                  <Btn
+                                    size="sm"
+                                    variant="secondary"
+                                    className="!px-2 !py-0.5 !text-[10px] leading-none whitespace-nowrap"
+                                    onClick={() => sendInviteForApplicant(app)}
+                                    disabled={sendingInvites || sendingReminders}
+                                  >
+                                    {app.interviewInviteSentAt ? "Resend Invite" : "Send Invite"}
+                                  </Btn>
+                                  <Btn
+                                    size="sm"
+                                    variant="primary"
+                                    className="!px-2 !py-0.5 !text-[10px] leading-none whitespace-nowrap"
+                                    onClick={() => {
+                                      setAcceptRole(app.finalDecisionRole || "Analyst");
+                                      setAcceptSendEmail(true);
+                                      setAcceptModalApp(app);
+                                    }}
+                                    disabled={bulkPromoting}
+                                  >
+                                    Accept
+                                  </Btn>
+                                  {canDelete && (
+                                    <Btn
+                                      size="sm"
+                                      variant="danger"
+                                      className="!px-2 !py-0.5 !text-[10px] leading-none whitespace-nowrap"
+                                      onClick={() => {
+                                        void ask(
+                                          async () => {
+                                            await deleteApplicant(app);
+                                          },
+                                          `Delete ${app.fullName}? This will permanently remove them from /members/applicants.`
+                                        );
+                                      }}
+                                    >
+                                      Delete
+                                    </Btn>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      default:
+                        return null;
+                    }
+                  })}
                 </tr>
               );
             })}

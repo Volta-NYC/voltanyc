@@ -679,30 +679,10 @@ function InterviewsContent() {
     [sortedSlots, now]
   );
 
-  const upcomingBookedByDate = useMemo(() => {
-    const byDate: Record<string, InterviewSlot[]> = {};
-    upcomingBookedSlots.forEach((slot) => {
-      const day = slotDateISOFromDateTime(slot.datetime);
-      if (!byDate[day]) byDate[day] = [];
-      byDate[day].push(slot);
-    });
-    return Object.entries(byDate).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [upcomingBookedSlots]);
-
   const pastBookedSlots = useMemo(
     () => sortedSlots.filter((s) => !!s.bookedBy && getSlotEndTimeMs(s) < now),
     [sortedSlots, now]
   );
-
-  const pastBookedByDate = useMemo(() => {
-    const byDate: Record<string, InterviewSlot[]> = {};
-    pastBookedSlots.forEach((slot) => {
-      const day = slotDateISOFromDateTime(slot.datetime);
-      if (!byDate[day]) byDate[day] = [];
-      byDate[day].push(slot);
-    });
-    return Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [pastBookedSlots]);
 
   const availableFutureSlots = useMemo(
     () =>
@@ -1673,153 +1653,139 @@ function InterviewsContent() {
             {zoomSaveMessage && <p className="text-xs text-white/55">{zoomSaveMessage}</p>}
           </div>
 
-          {upcomingBookedByDate.length === 0 && (
+          {upcomingBookedSlots.length === 0 && (
             <div className="bg-[#1C1F26] border border-white/8 rounded-xl p-8 text-center text-white/30 text-sm font-body">
               No upcoming interviews booked yet.
             </div>
           )}
-          {upcomingBookedByDate.map(([day, daySlots]) => (
-            <div key={day}>
-              <h3 className="text-white/60 text-sm font-semibold font-body mb-2">{formatDateHeading(day)}</h3>
-              <div className="space-y-2">
-                {daySlots.map((slot) => {
-                  const displayName = slot.bookerName?.trim() || "Interviewee";
-                  const slotInterviewers = getSlotInterviewerNames(slot, memberNameById);
-                  const resumeUrl = findResumeUrlForSlot(slot);
-                  const matchedApp = findApplicationForSlot(slot);
-                  const evalCount = Object.keys((matchedApp?.interviewEvaluations ?? {}) as Record<string, unknown>).length;
-                  return (
-                    <div key={slot.id} className="bg-[#1C1F26] border border-white/8 rounded-xl px-4 py-3 flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white text-sm font-semibold">{displayName}</p>
-                        <p className="text-white/45 text-xs font-body mt-0.5">
-                          {formatDateTime(slot.datetime)}
-                          {slot.bookerEmail ? ` · ${slot.bookerEmail}` : ""}
-                          {slotInterviewers.length > 0
-                            ? ` · Interviewer${slotInterviewers.length > 1 ? "s" : ""}: ${slotInterviewers.join(", ")}`
-                            : ""}
-                        </p>
-                        {evalCount > 0 && (
-                          <p className="text-[11px] text-white/45 mt-0.5">{evalCount} evaluation{evalCount > 1 ? "s" : ""} submitted</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {canDeleteInterviews ? (
-                          <>
-                            <Btn size="sm" variant="secondary" onClick={() => startReschedule(slot)}>
-                              Move
-                            </Btn>
-                            <Btn size="sm" variant="secondary" onClick={() => openEvaluation(slot)}>
-                              Evaluate
-                            </Btn>
-                            {resumeUrl && (
-                              <a
-                                href={resumeUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/8 border border-white/12 text-white/80 hover:bg-white/12 transition-colors"
-                              >
-                                Resume
-                              </a>
+          {upcomingBookedSlots.length > 0 && (
+            <div className="bg-[#1C1F26] border border-white/8 rounded-xl overflow-x-auto">
+              <table className="w-full text-[11px] leading-4">
+                <thead className="bg-[#0F1014] border-b border-white/8">
+                  <tr>
+                    {["Name", "Email", "Time", "Interviewer(s)", "Evals", "Actions"].map((col) => (
+                      <th key={col} className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-white/45 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-0.5">
+                          {col}
+                          {col === "Time" && (
+                            <span className="inline-flex flex-col ml-1 -space-y-[3px] leading-none align-middle">
+                              <span className="text-[8px] text-white/80">▲</span>
+                              <span className="text-[8px] text-white/20">▼</span>
+                            </span>
+                          )}
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {upcomingBookedSlots.map((slot) => {
+                    const displayName = slot.bookerName?.trim() || "Interviewee";
+                    const slotInterviewers = getSlotInterviewerNames(slot, memberNameById);
+                    const resumeUrl = findResumeUrlForSlot(slot);
+                    const matchedApp = findApplicationForSlot(slot);
+                    const evalCount = Object.keys((matchedApp?.interviewEvaluations ?? {}) as Record<string, unknown>).length;
+                    return (
+                      <tr key={slot.id} className="hover:bg-white/3 transition-colors">
+                        <td className="px-2 py-1.5 text-white/90 font-medium whitespace-nowrap">{displayName}</td>
+                        <td className="px-2 py-1.5 text-white/55 font-mono">{slot.bookerEmail || "—"}</td>
+                        <td className="px-2 py-1.5 text-white/65 whitespace-nowrap">{formatDateTime(slot.datetime)}</td>
+                        <td className="px-2 py-1.5 text-white/50 whitespace-nowrap">{slotInterviewers.length > 0 ? slotInterviewers.join(", ") : "—"}</td>
+                        <td className="px-2 py-1.5 text-white/45">{evalCount > 0 ? evalCount : "—"}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap">
+                          <div className="flex gap-1 flex-nowrap">
+                            {canDeleteInterviews ? (
+                              <>
+                                <Btn size="sm" variant="secondary" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => startReschedule(slot)}>Move</Btn>
+                                <Btn size="sm" variant="secondary" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => openEvaluation(slot)}>Evaluate</Btn>
+                                {resumeUrl && (
+                                  <a href={resumeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white/8 border border-white/12 text-white/80 hover:bg-white/12 transition-colors">Resume</a>
+                                )}
+                                <Btn size="sm" variant="danger" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => cancelBookedInterview(slot)}>Cancel</Btn>
+                              </>
+                            ) : (
+                              <>
+                                <Btn size="sm" variant="secondary" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => openEvaluation(slot)}>Evaluate</Btn>
+                                {resumeUrl && (
+                                  <a href={resumeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white/8 border border-white/12 text-white/80 hover:bg-white/12 transition-colors">Resume</a>
+                                )}
+                              </>
                             )}
-                            <Btn size="sm" variant="danger" onClick={() => cancelBookedInterview(slot)}>
-                              Cancel
-                            </Btn>
-                          </>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <Btn size="sm" variant="secondary" onClick={() => openEvaluation(slot)}>
-                              Evaluate
-                            </Btn>
-                            {resumeUrl && (
-                              <a
-                                href={resumeUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/8 border border-white/12 text-white/80 hover:bg-white/12 transition-colors"
-                              >
-                                Resume
-                              </a>
-                            )}
-                            <span className="text-white/30 text-xs font-body">View only</span>
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          ))}
+          )}
         </div>
       )}
 
       {activeTab === "past" && (
         <div className="space-y-5">
           {pastMessage && <p className="text-xs text-white/55 font-body">{pastMessage}</p>}
-          {pastBookedByDate.length === 0 && (
+          {pastBookedSlots.length === 0 && (
             <div className="bg-[#1C1F26] border border-white/8 rounded-xl p-8 text-center text-white/30 text-sm font-body">
               No past interviews found.
             </div>
           )}
-          {pastBookedByDate.map(([day, daySlots]) => (
-            <div key={day}>
-              <h3 className="text-white/60 text-sm font-semibold font-body mb-2">{formatDateHeading(day)}</h3>
-              <div className="space-y-2">
-                {daySlots.map((slot) => {
-                  const displayName = slot.bookerName?.trim() || "Interviewee";
-                  const slotInterviewers = getSlotInterviewerNames(slot, memberNameById);
-                  const resumeUrl = findResumeUrlForSlot(slot);
-                  const matchedApp = findApplicationForSlot(slot);
-                  const evalCount = Object.keys((matchedApp?.interviewEvaluations ?? {}) as Record<string, unknown>).length;
-                  return (
-                    <div key={slot.id} className="bg-[#1C1F26] border border-white/8 rounded-xl px-4 py-3 flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-white/30 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white text-sm font-semibold">{displayName}</p>
-                        <p className="text-white/45 text-xs font-body mt-0.5">
-                          {formatDateTime(slot.datetime)}
-                          {slot.bookerEmail ? ` · ${slot.bookerEmail}` : ""}
-                          {slotInterviewers.length > 0
-                            ? ` · Interviewer${slotInterviewers.length > 1 ? "s" : ""}: ${slotInterviewers.join(", ")}`
-                            : ""}
-                        </p>
-                        {evalCount > 0 && (
-                          <p className="text-[11px] text-white/45 mt-0.5">{evalCount} evaluation{evalCount > 1 ? "s" : ""} submitted</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <Btn size="sm" variant="secondary" onClick={() => openEvaluation(slot)}>
-                          Evaluate
-                        </Btn>
-                        {canDeleteInterviews && (
-                          <Btn size="sm" variant="primary" onClick={() => setFinalizeSlot(slot)}>
-                            Accept
-                          </Btn>
-                        )}
-                        {resumeUrl && (
-                          <a
-                            href={resumeUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/8 border border-white/12 text-white/80 hover:bg-white/12 transition-colors"
-                          >
-                            Resume
-                          </a>
-                        )}
-                        {canDeleteInterviews && (
-                          <Btn size="sm" variant="danger" onClick={() => deletePastInterviewEntry(slot)}>
-                            Delete
-                          </Btn>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+          {pastBookedSlots.length > 0 && (
+            <div className="bg-[#1C1F26] border border-white/8 rounded-xl overflow-x-auto">
+              <table className="w-full text-[11px] leading-4">
+                <thead className="bg-[#0F1014] border-b border-white/8">
+                  <tr>
+                    {["Name", "Email", "Time", "Interviewer(s)", "Evals", "Actions"].map((col) => (
+                      <th key={col} className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-white/45 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-0.5">
+                          {col}
+                          {col === "Time" && (
+                            <span className="inline-flex flex-col ml-1 -space-y-[3px] leading-none align-middle">
+                              <span className="text-[8px] text-white/20">▲</span>
+                              <span className="text-[8px] text-white/80">▼</span>
+                            </span>
+                          )}
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {[...pastBookedSlots].reverse().map((slot) => {
+                    const displayName = slot.bookerName?.trim() || "Interviewee";
+                    const slotInterviewers = getSlotInterviewerNames(slot, memberNameById);
+                    const resumeUrl = findResumeUrlForSlot(slot);
+                    const matchedApp = findApplicationForSlot(slot);
+                    const evalCount = Object.keys((matchedApp?.interviewEvaluations ?? {}) as Record<string, unknown>).length;
+                    return (
+                      <tr key={slot.id} className="hover:bg-white/3 transition-colors">
+                        <td className="px-2 py-1.5 text-white/90 font-medium whitespace-nowrap">{displayName}</td>
+                        <td className="px-2 py-1.5 text-white/55 font-mono">{slot.bookerEmail || "—"}</td>
+                        <td className="px-2 py-1.5 text-white/65 whitespace-nowrap">{formatDateTime(slot.datetime)}</td>
+                        <td className="px-2 py-1.5 text-white/50 whitespace-nowrap">{slotInterviewers.length > 0 ? slotInterviewers.join(", ") : "—"}</td>
+                        <td className="px-2 py-1.5 text-white/45">{evalCount > 0 ? evalCount : "—"}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap">
+                          <div className="flex gap-1 flex-nowrap">
+                            <Btn size="sm" variant="secondary" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => openEvaluation(slot)}>Evaluate</Btn>
+                            {canDeleteInterviews && (
+                              <Btn size="sm" variant="primary" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => setFinalizeSlot(slot)}>Accept</Btn>
+                            )}
+                            {resumeUrl && (
+                              <a href={resumeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white/8 border border-white/12 text-white/80 hover:bg-white/12 transition-colors">Resume</a>
+                            )}
+                            {canDeleteInterviews && (
+                              <Btn size="sm" variant="danger" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => deletePastInterviewEntry(slot)}>Delete</Btn>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          ))}
+          )}
         </div>
       )}
 

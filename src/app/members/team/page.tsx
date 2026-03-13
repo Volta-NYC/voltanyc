@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect } from "react";
 import MembersLayout from "@/components/members/MembersLayout";
 import {
-  PageHeader, SearchBar, Btn, Modal, Field, Input, TextArea, Empty, useConfirm,
+  PageHeader, SearchBar, Btn, Modal, Field, Input, TextArea, Empty, useConfirm, AutocompleteTagInput,
 } from "@/components/members/ui";
 import {
   subscribeTeam, createTeamMember, updateTeamMember, deleteTeamMember, type TeamMember,
@@ -22,14 +22,14 @@ const BLANK_FORM: Omit<TeamMember, "id" | "createdAt"> = {
 
 const GRADE_OPTIONS = ["Freshman", "Sophomore", "Junior", "Senior", "College"];
 
-type TrackKey = "Tech" | "Marketing" | "Finance" | "Outreach" | "—";
+type TrackKey = "Tech" | "Marketing" | "Finance" | "Other" | "—";
 
 function getMemberTrack(member: TeamMember): TrackKey {
   const divisions = member.divisions ?? [];
   if (divisions.includes("Tech")) return "Tech";
   if (divisions.includes("Marketing")) return "Marketing";
   if (divisions.includes("Finance")) return "Finance";
-  if (divisions.includes("Outreach")) return "Outreach";
+  if (divisions.includes("Other") || divisions.includes("Outreach")) return "Other";
   return "—";
 }
 
@@ -41,7 +41,7 @@ function getTrackAvatarStyles(track: TrackKey): { bg: string; text: string } {
       return { bg: "#ECFCCB", text: "#365314" };
     case "Finance":
       return { bg: "#FEF3C7", text: "#92400E" };
-    case "Outreach":
+    case "Other":
       return { bg: "#F3F4F6", text: "#374151" };
     default:
       return { bg: "rgba(133,204,23,0.15)", text: "#85CC17" };
@@ -94,7 +94,7 @@ const TEAM_CODE_BY_NAME: Record<string, string> = {
 const TRACK_SORT_ORDER: Record<TrackKey, number> = {
   Finance: 0,
   Marketing: 1,
-  Outreach: 2,
+  Other: 2,
   Tech: 3,
   "—": 4,
 };
@@ -220,7 +220,7 @@ function parseTrack(raw: string): TrackKey {
   if (key.includes("tech") || key.includes("digital")) return "Tech";
   if (key.includes("market")) return "Marketing";
   if (key.includes("finance") || key.includes("operation")) return "Finance";
-  if (key.includes("outreach")) return "Outreach";
+  if (key.includes("outreach") || key.includes("other")) return "Other";
   return "—";
 }
 
@@ -232,18 +232,20 @@ export default function TeamPage() {
   const [modal, setModal]             = useState<"create" | "edit" | null>(null);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [form, setForm]               = useState(BLANK_FORM);
-  const [sortCol, setSortCol]         = useState(0);
-  const [sortDir, setSortDir]         = useState<"asc" | "desc">("asc");
+  const [sortRules, setSortRules]     = useState<{ col: number; dir: "asc" | "desc" }[]>([{ col: 0, dir: "asc" }]);
+  const [showSortPanel, setShowSortPanel] = useState(false);
   const [importingCsv, setImportingCsv] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [commsOpen, setCommsOpen] = useState(false);
-  const [commsDivision, setCommsDivision] = useState<string>("");
-  const [commsSchool, setCommsSchool] = useState<string>("");
-  const [commsRole, setCommsRole] = useState<string>("");
+  const [commsDivisions, setCommsDivisions] = useState<string[]>([]);
+  const [commsSchools, setCommsSchools] = useState<string[]>([]);
+  const [commsRoles, setCommsRoles] = useState<string[]>([]);
+  const [commsTeams, setCommsTeams] = useState<string[]>([]);
   const [commsFrom, setCommsFrom] = useState<string>("info@voltanyc.org");
   const [commsSelectedIds, setCommsSelectedIds] = useState<string[]>([]);
   const [commsSubject, setCommsSubject] = useState("");
   const [commsMessage, setCommsMessage] = useState("");
+  const [commsContentMode, setCommsContentMode] = useState<"plain" | "html">("plain");
   const [commsSending, setCommsSending] = useState(false);
   const [commsStatus, setCommsStatus] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -503,42 +505,85 @@ export default function TeamPage() {
     return matchesSearch;
   });
 
-  const handleSort = (i: number) => {
-    if (sortCol === i) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortCol(i); setSortDir("asc"); }
-  };
-  const sorted = [...filtered].sort((a, b) => {
-    let cmp = 0;
-    switch (sortCol) {
+  const SORT_COLUMNS = ["Track", "Team", "Name", "Email", "School", "Grade", "Date Accepted"];
+
+  const compareMemberByCol = (a: TeamMember, b: TeamMember, col: number): number => {
+    switch (col) {
       case 0: {
         const trackCmp = TRACK_SORT_ORDER[getMemberTrack(a)] - TRACK_SORT_ORDER[getMemberTrack(b)];
-        cmp = trackCmp !== 0 ? trackCmp : a.name.localeCompare(b.name);
-        break;
+        if (trackCmp !== 0) return trackCmp;
+        const teamCmp = getMemberTeamCode(a).localeCompare(getMemberTeamCode(b));
+        return teamCmp !== 0 ? teamCmp : a.name.localeCompare(b.name);
       }
-      case 1: cmp = getMemberTeamCode(a).localeCompare(getMemberTeamCode(b)); break;
-      case 2: cmp = a.name.localeCompare(b.name); break;
-      case 3: cmp = (a.email || "").localeCompare(b.email || ""); break;
-      case 4: cmp = (a.school || "").localeCompare(b.school || ""); break;
-      case 5: cmp = (a.grade || "").localeCompare(b.grade || ""); break;
-      case 6: cmp = (a.acceptedDate || "").localeCompare(b.acceptedDate || ""); break;
+      case 1: return getMemberTeamCode(a).localeCompare(getMemberTeamCode(b));
+      case 2: return a.name.localeCompare(b.name);
+      case 3: return (a.email || "").localeCompare(b.email || "");
+      case 4: return (a.school || "").localeCompare(b.school || "");
+      case 5: return (a.grade || "").localeCompare(b.grade || "");
+      case 6: return (a.acceptedDate || "").localeCompare(b.acceptedDate || "");
       default: return 0;
     }
-    return sortDir === "asc" ? cmp : -cmp;
+  };
+
+  const handleSort = (i: number) => {
+    // Click on column header = reset to single-column sort
+    const current = sortRules[0];
+    if (current && current.col === i) {
+      setSortRules([{ col: i, dir: current.dir === "asc" ? "desc" : "asc" }]);
+    } else {
+      setSortRules([{ col: i, dir: "asc" }]);
+    }
+  };
+
+  const addSortRule = () => {
+    const usedCols = new Set(sortRules.map((r) => r.col));
+    const nextCol = SORT_COLUMNS.findIndex((_, i) => !usedCols.has(i));
+    if (nextCol === -1) return;
+    setSortRules((prev) => [...prev, { col: nextCol, dir: "asc" }]);
+  };
+
+  const removeSortRule = (idx: number) => {
+    setSortRules((prev) => {
+      const next = prev.filter((_, i) => i !== idx);
+      return next.length === 0 ? [{ col: 0, dir: "asc" }] : next;
+    });
+  };
+
+  const updateSortRule = (idx: number, field: "col" | "dir", value: number | string) => {
+    setSortRules((prev) => prev.map((r, i) => {
+      if (i !== idx) return r;
+      if (field === "col") return { ...r, col: value as number };
+      return { ...r, dir: value as "asc" | "desc" };
+    }));
+  };
+
+  const sorted = [...filtered].sort((a, b) => {
+    for (const rule of sortRules) {
+      const cmp = compareMemberByCol(a, b, rule.col);
+      if (cmp !== 0) return rule.dir === "asc" ? cmp : -cmp;
+    }
+    return 0;
   });
 
-  const commsDivisionOptions = ["Tech", "Marketing", "Finance", "Outreach"];
+  const commsDivisionOptions = ["Tech", "Marketing", "Finance", "Other"];
   const commsSchoolOptions = Array.from(
     new Set(team.map((member) => (member.school ?? "").trim()).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b));
   const commsRoleOptions = Array.from(
     new Set(team.map((member) => (member.role ?? "").trim()).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b));
+  const commsTeamOptions = Array.from(
+    new Set(team.map((member) => getMemberTeamCode(member)).filter((value) => value && value !== "—"))
+  ).sort((a, b) => a.localeCompare(b));
 
   const commsFilteredMembers = team.filter((member) => {
-    const divisionMatch = !commsDivision || (member.divisions ?? []).includes(commsDivision);
-    const schoolMatch = !commsSchool || (member.school ?? "").trim() === commsSchool;
-    const roleMatch = !commsRole || (member.role ?? "").trim() === commsRole;
-    return divisionMatch && schoolMatch && roleMatch;
+    const divisions = member.divisions ?? [];
+    const teamCode = getMemberTeamCode(member);
+    const divisionMatch = commsDivisions.length === 0 || divisions.some((d) => commsDivisions.includes(d));
+    const schoolMatch = commsSchools.length === 0 || commsSchools.includes((member.school ?? "").trim());
+    const roleMatch = commsRoles.length === 0 || commsRoles.includes((member.role ?? "").trim());
+    const teamMatch = commsTeams.length === 0 || commsTeams.includes(teamCode);
+    return divisionMatch && schoolMatch && roleMatch && teamMatch;
   });
 
   const commsSelectedEmails = Array.from(
@@ -552,10 +597,12 @@ export default function TeamPage() {
 
   const openCommsModal = () => {
     setCommsOpen(true);
-    setCommsDivision("");
-    setCommsSchool("");
-    setCommsRole("");
+    setCommsDivisions([]);
+    setCommsSchools([]);
+    setCommsRoles([]);
+    setCommsTeams([]);
     setCommsFrom("info@voltanyc.org");
+    setCommsContentMode("plain");
     setCommsSelectedIds(team.map((member) => member.id));
     setCommsSubject("");
     setCommsMessage("");
@@ -609,6 +656,7 @@ export default function TeamPage() {
           fromAddress: commsFrom,
           subject: commsSubject.trim(),
           message: commsMessage.trim(),
+          contentMode: commsContentMode,
           recipients: commsSelectedEmails,
         }),
       });
@@ -669,9 +717,49 @@ export default function TeamPage() {
       )}
 
       {/* Search controls */}
-      <div className="flex gap-3 mb-4 flex-wrap">
+      <div className="flex gap-3 mb-4 flex-wrap items-center">
         <SearchBar value={search} onChange={setSearch} placeholder="Search by name, email, school, or grade…" />
-        {canEdit && <Btn variant="secondary" onClick={openCommsModal}>Send Email</Btn>}
+        {canEdit && <Btn variant="primary" onClick={openCommsModal}>Send Emails</Btn>}
+        <div className="relative">
+          <Btn size="sm" variant="ghost" onClick={() => setShowSortPanel((v) => !v)}>
+            Sort{sortRules.length > 1 ? ` (${sortRules.length})` : ""}
+          </Btn>
+          {showSortPanel && (
+            <div className="absolute top-full left-0 mt-1 bg-[#1C1F26] border border-white/10 rounded-lg shadow-xl z-50 p-3 min-w-[320px]">
+              <p className="text-[10px] text-white/40 uppercase tracking-wide mb-2">Sort Rules</p>
+              {sortRules.map((rule, idx) => (
+                <div key={idx} className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] text-white/40 w-[48px]">{idx === 0 ? "Sort by" : "Then by"}</span>
+                  <select
+                    value={rule.col}
+                    onChange={(e) => updateSortRule(idx, "col", Number(e.target.value))}
+                    className="flex-1 bg-[#0F1014] border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-[#85CC17]/45"
+                  >
+                    {SORT_COLUMNS.map((name, i) => (
+                      <option key={i} value={i}>{name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={rule.dir}
+                    onChange={(e) => updateSortRule(idx, "dir", e.target.value)}
+                    className="bg-[#0F1014] border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-[#85CC17]/45 w-[60px]"
+                  >
+                    <option value="asc">A→Z</option>
+                    <option value="desc">Z→A</option>
+                  </select>
+                  {sortRules.length > 1 && (
+                    <button onClick={() => removeSortRule(idx)} className="text-white/30 hover:text-white/60 text-xs">✕</button>
+                  )}
+                </div>
+              ))}
+              {sortRules.length < SORT_COLUMNS.length && (
+                <button onClick={addSortRule} className="text-[10px] text-[#85CC17]/70 hover:text-[#85CC17] transition-colors">
+                  + Add sort level
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Team member list */}
@@ -683,16 +771,23 @@ export default function TeamPage() {
             <tr>
               {["Track", "Team", "Name", "Email", "School", "Grade", "Date Accepted", "Actions"].map((col, idx) => {
                 const sortable = [0, 1, 2, 3, 4, 5, 6].includes(idx);
-                const active = sortCol === idx;
+                const primaryRule = sortRules[0];
+                const isActive = primaryRule?.col === idx;
+                const dir = isActive ? primaryRule.dir : "asc";
                 return (
                   <th
                     key={col}
                     className={`px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-white/45 whitespace-nowrap ${sortable ? "cursor-pointer select-none" : ""} ${col === "Track" || col === "Team" ? "w-[56px]" : ""} ${col === "Actions" ? "w-[120px]" : ""}`}
                     onClick={() => sortable && handleSort(idx)}
                   >
-                    <span className="inline-flex items-center gap-1">
+                    <span className="inline-flex items-center gap-0.5">
                       {col}
-                      {active && <span className="text-white/35">{sortDir === "asc" ? "↑" : "↓"}</span>}
+                      {sortable && (
+                        <span className="inline-flex flex-col ml-0.5 -space-y-[3px] leading-none align-middle">
+                          <span className={`text-[8px] ${isActive && dir === "asc" ? "text-white/80" : "text-white/20"}`}>▲</span>
+                          <span className={`text-[8px] ${isActive && dir === "desc" ? "text-white/80" : "text-white/20"}`}>▼</span>
+                        </span>
+                      )}
                     </span>
                   </th>
                 );
@@ -725,10 +820,10 @@ export default function TeamPage() {
                   <td className="px-2 py-1.5 whitespace-nowrap">
                     <span
                       className="font-mono text-white/50 block truncate"
-                      title={member.alternateEmail ? `${member.email || "—"} | ${member.alternateEmail}` : (member.email || "—")}
+                      title={member.alternateEmail ? `${member.email || "—"}, ${member.alternateEmail}` : (member.email || "—")}
                     >
                       {member.email || "—"}
-                      {member.alternateEmail ? ` | ${member.alternateEmail}` : ""}
+                      {member.alternateEmail ? `, ${member.alternateEmail}` : ""}
                     </span>
                   </td>
                   <td className="px-2 py-1.5 whitespace-nowrap">
@@ -761,42 +856,38 @@ export default function TeamPage() {
 
       <Modal open={commsOpen} onClose={() => setCommsOpen(false)} title="Send Member Email">
         <div className="space-y-4">
-          <div className="grid md:grid-cols-3 gap-3">
+          <div className="grid md:grid-cols-2 gap-3">
             <Field label="Division">
-              <select
-                value={commsDivision}
-                onChange={(e) => setCommsDivision(e.target.value)}
-                className="w-full bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#85CC17]/45"
-              >
-                <option value="">All</option>
-                {commsDivisionOptions.map((value) => (
-                  <option key={value} value={value}>{value}</option>
-                ))}
-              </select>
+              <AutocompleteTagInput
+                values={commsDivisions}
+                onChange={setCommsDivisions}
+                options={commsDivisionOptions}
+                placeholder="Type division…"
+              />
             </Field>
             <Field label="School">
-              <select
-                value={commsSchool}
-                onChange={(e) => setCommsSchool(e.target.value)}
-                className="w-full bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#85CC17]/45"
-              >
-                <option value="">All</option>
-                {commsSchoolOptions.map((value) => (
-                  <option key={value} value={value}>{value}</option>
-                ))}
-              </select>
+              <AutocompleteTagInput
+                values={commsSchools}
+                onChange={setCommsSchools}
+                options={commsSchoolOptions}
+                placeholder="Type school…"
+              />
             </Field>
             <Field label="Role">
-              <select
-                value={commsRole}
-                onChange={(e) => setCommsRole(e.target.value)}
-                className="w-full bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#85CC17]/45"
-              >
-                <option value="">All</option>
-                {commsRoleOptions.map((value) => (
-                  <option key={value} value={value}>{value}</option>
-                ))}
-              </select>
+              <AutocompleteTagInput
+                values={commsRoles}
+                onChange={setCommsRoles}
+                options={commsRoleOptions}
+                placeholder="Type role…"
+              />
+            </Field>
+            <Field label="Team">
+              <AutocompleteTagInput
+                values={commsTeams}
+                onChange={setCommsTeams}
+                options={commsTeamOptions}
+                placeholder="Type team code…"
+              />
             </Field>
           </div>
 
@@ -863,8 +954,27 @@ export default function TeamPage() {
               ))}
             </select>
           </Field>
+          <Field label="Message Format" required>
+            <select
+              value={commsContentMode}
+              onChange={(e) => setCommsContentMode(e.target.value === "html" ? "html" : "plain")}
+              className="w-full bg-[#0F1014] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#85CC17]/45"
+            >
+              <option value="plain">Plain Text</option>
+              <option value="html">HTML (links/images supported)</option>
+            </select>
+          </Field>
           <Field label="Message" required>
-            <TextArea rows={7} value={commsMessage} onChange={(e) => setCommsMessage(e.target.value)} />
+            <TextArea
+              rows={9}
+              value={commsMessage}
+              onChange={(e) => setCommsMessage(e.target.value)}
+              placeholder={
+                commsContentMode === "html"
+                  ? "<p>Hi team,</p><p>Update with <a href=\"https://...\">link</a>.</p><img src=\"https://...\" alt=\"\" />"
+                  : "Write your email..."
+              }
+            />
           </Field>
           {commsStatus && <p className="text-xs text-white/60">{commsStatus}</p>}
 
@@ -875,7 +985,7 @@ export default function TeamPage() {
               onClick={sendCommsEmail}
               disabled={commsSending || commsSelectedEmails.length === 0}
             >
-              {commsSending ? "Sending..." : `Send (${commsSelectedEmails.length})`}
+              {commsSending ? "Sending..." : `Send Emails (${commsSelectedEmails.length})`}
             </Btn>
           </div>
         </div>
@@ -925,7 +1035,7 @@ export default function TeamPage() {
               <option value="Tech">Tech</option>
               <option value="Marketing">Marketing</option>
               <option value="Finance">Finance</option>
-              <option value="Outreach">Outreach</option>
+              <option value="Other">Other</option>
             </select>
           </Field>
         </div>
