@@ -1661,7 +1661,7 @@ function InterviewsContent() {
               <table className="w-full text-[11px] leading-4">
                 <thead className="bg-[#0F1014] border-b border-white/8">
                   <tr>
-                    {["Name", "Email", "Time", "Interviewer(s)", "Evals", "Actions"].map((col) => (
+                    {["Name", "Email", "Time", "Interviewer(s)", "Evals", "Resume", "Actions"].map((col) => (
                       <th key={col} className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-white/45 whitespace-nowrap">
                         <span className="inline-flex items-center gap-0.5">
                           {col}
@@ -1690,23 +1690,31 @@ function InterviewsContent() {
                         <td className="px-2 py-1.5 text-white/65 whitespace-nowrap">{formatDateTime(slot.datetime)}</td>
                         <td className="px-2 py-1.5 text-white/50 whitespace-nowrap">{slotInterviewers.length > 0 ? slotInterviewers.join(", ") : "—"}</td>
                         <td className="px-2 py-1.5 text-white/45">{evalCount > 0 ? evalCount : "—"}</td>
+                        <td className="px-2 py-1.5">
+                          {resumeUrl ? (
+                            <a 
+                              href={resumeUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-[#C4F135] hover:underline text-[11px] whitespace-nowrap"
+                            >
+                              Resume
+                            </a>
+                          ) : (
+                            <span className="text-white/20">—</span>
+                          )}
+                        </td>
                         <td className="px-2 py-1.5 whitespace-nowrap">
                           <div className="flex gap-1 flex-nowrap">
                             {canDeleteInterviews ? (
                               <>
                                 <Btn size="sm" variant="secondary" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => startReschedule(slot)}>Move</Btn>
                                 <Btn size="sm" variant="secondary" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => openEvaluation(slot)}>Evaluate</Btn>
-                                {resumeUrl && (
-                                  <a href={resumeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white/8 border border-white/12 text-white/80 hover:bg-white/12 transition-colors">Resume</a>
-                                )}
                                 <Btn size="sm" variant="danger" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => cancelBookedInterview(slot)}>Cancel</Btn>
                               </>
                             ) : (
                               <>
                                 <Btn size="sm" variant="secondary" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => openEvaluation(slot)}>Evaluate</Btn>
-                                {resumeUrl && (
-                                  <a href={resumeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white/8 border border-white/12 text-white/80 hover:bg-white/12 transition-colors">Resume</a>
-                                )}
                               </>
                             )}
                           </div>
@@ -1734,7 +1742,7 @@ function InterviewsContent() {
               <table className="w-full text-[11px] leading-4">
                 <thead className="bg-[#0F1014] border-b border-white/8">
                   <tr>
-                    {["Name", "Email", "Time", "Interviewer(s)", "Evals", "Actions"].map((col) => (
+                    {["Name", "Email", "Time", "Interviewer(s)", "Evals", "Resume", "Actions"].map((col) => (
                       <th key={col} className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-white/45 whitespace-nowrap">
                         <span className="inline-flex items-center gap-0.5">
                           {col}
@@ -1772,14 +1780,25 @@ function InterviewsContent() {
                             </button>
                           ) : "—"}
                         </td>
+                        <td className="px-2 py-1.5">
+                          {resumeUrl ? (
+                            <a 
+                              href={resumeUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-[#C4F135] hover:underline text-[11px] whitespace-nowrap"
+                            >
+                              Resume
+                            </a>
+                          ) : (
+                            <span className="text-white/20">—</span>
+                          )}
+                        </td>
                         <td className="px-2 py-1.5 whitespace-nowrap">
                           <div className="flex gap-1 flex-nowrap">
                             <Btn size="sm" variant="secondary" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => openEvaluation(slot)}>Evaluate</Btn>
                             {canDeleteInterviews && (
                               <Btn size="sm" variant="primary" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => setFinalizeSlot(slot)}>Accept</Btn>
-                            )}
-                            {resumeUrl && (
-                              <a href={resumeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white/8 border border-white/12 text-white/80 hover:bg-white/12 transition-colors">Resume</a>
                             )}
                             {canDeleteInterviews && (
                               <Btn size="sm" variant="danger" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => deletePastInterviewEntry(slot)}>Delete</Btn>
