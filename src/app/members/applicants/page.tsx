@@ -725,7 +725,7 @@ export default function ApplicantsPage() {
       </div>
 
       <div className="bg-[#1C1F26] border border-white/8 rounded-xl overflow-x-auto">
-        <table className="w-full min-w-[1380px] text-[11px] leading-4">
+        <table className="w-full min-w-[1500px] text-[11px] leading-4 table-fixed">
           <thead className="bg-[#0F1014] border-b border-white/8">
             <tr>
               {canEdit && (
@@ -754,7 +754,7 @@ export default function ApplicantsPage() {
               const bookedAfterInvite = Number.isFinite(inviteSentAt) && Number.isFinite(bookedAt) && bookedAt >= inviteSentAt;
               const evalCount = Object.keys((app.interviewEvaluations ?? {}) as Record<string, unknown>).length;
               return (
-                <tr key={app.id} className="hover:bg-white/3 transition-colors align-top">
+                <tr key={app.id} className="hover:bg-white/3 transition-colors">
                   {canEdit && (
                     <td className="px-2 py-1.5">
                       <input
@@ -785,12 +785,24 @@ export default function ApplicantsPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-2 py-1.5 text-white/85">{app.fullName}</td>
-                  <td className="px-2 py-1.5 text-white/60 font-mono">{app.email}</td>
-                  <td className="px-2 py-1.5 text-white/55">{app.schoolName || "—"}</td>
-                  <td className="px-2 py-1.5 text-white/50">{app.cityState || "—"}</td>
-                  <td className="px-2 py-1.5 text-white/50">{app.referral || "—"}</td>
-                  <td className="px-2 py-1.5 text-white/50">{app.tracksSelected || "—"}</td>
+                  <td className="px-2 py-1.5 text-white/85 whitespace-nowrap">
+                    <span className="block truncate" title={app.fullName}>{app.fullName}</span>
+                  </td>
+                  <td className="px-2 py-1.5 text-white/60 font-mono whitespace-nowrap">
+                    <span className="block truncate" title={app.email}>{app.email}</span>
+                  </td>
+                  <td className="px-2 py-1.5 text-white/55 whitespace-nowrap">
+                    <span className="block truncate" title={app.schoolName || ""}>{app.schoolName || "—"}</span>
+                  </td>
+                  <td className="px-2 py-1.5 text-white/50 whitespace-nowrap">
+                    <span className="block truncate" title={app.cityState || ""}>{app.cityState || "—"}</span>
+                  </td>
+                  <td className="px-2 py-1.5 text-white/50 whitespace-nowrap">
+                    <span className="block truncate" title={app.referral || ""}>{app.referral || "—"}</span>
+                  </td>
+                  <td className="px-2 py-1.5 text-white/50 whitespace-nowrap">
+                    <span className="block truncate" title={app.tracksSelected || ""}>{app.tracksSelected || "—"}</span>
+                  </td>
                   <td className="px-2 py-1.5">
                     {app.resumeUrl ? (
                       <a

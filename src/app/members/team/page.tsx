@@ -48,6 +48,49 @@ function getTrackAvatarStyles(track: TrackKey): { bg: string; text: string } {
   }
 }
 
+const TEAM_CODE_BY_EMAIL: Record<string, string> = {
+  // Finance sub-teams
+  "iamalvinjiang@gmail.com": "FA",
+  "shafeen873@gmail.com": "FA",
+  "bruceweng374@gmail.com": "FA",
+  "tsundrukn@gmail.com": "FA",
+  "yubabhatta1@gmail.com": "FA",
+  "peytonsyuen@gmail.com": "FA",
+
+  "nafismahimofficial@gmail.com": "FB",
+  "tylert4645@gmail.com": "FB",
+  "joseph.long.nyc@gmail.com": "FB",
+  "walterrz1230@gmail.com": "FB",
+  "madaniremichaela@gmail.com": "FB",
+  "ash28mui@gmail.com": "FB",
+  "thakkar.jay2009@gmail.com": "FB",
+
+  "linkevin246@gmail.com": "FC",
+  "jackywang397@gmail.com": "FC",
+  "angelinec085@gmail.com": "FC",
+  "tiffanyxu1294@gmail.com": "FC",
+  "ryanliu.contact@gmail.com": "FC",
+};
+
+const TEAM_CODE_BY_NAME: Record<string, string> = {
+  // Tech team sets
+  "eddie shah": "T1",
+  "maahika chitagi": "T1",
+  "shokhjakhon samiev": "T1",
+
+  "aarav sharma": "T2",
+  "arnob paul": "T2",
+  "batuhan sekeroglu": "T2",
+
+  "ronghe guo": "T3",
+  "peter predolac": "T3",
+  "xiang li": "T3",
+
+  "akhil rao": "T4",
+  "mohammad ehan khan": "T4",
+  "nelson guo": "T4",
+};
+
 const TRACK_SORT_ORDER: Record<TrackKey, number> = {
   Finance: 0,
   Marketing: 1,
@@ -75,6 +118,16 @@ function normalizeText(v: string): string {
 
 function normalizeKey(v: string): string {
   return normalizeText(v).toLowerCase();
+}
+
+function getMemberTeamCode(member: TeamMember): string {
+  const email = normalizeKey(member.email ?? "");
+  const altEmail = normalizeKey(member.alternateEmail ?? "");
+  const name = normalizeKey(member.name ?? "");
+  if (email && TEAM_CODE_BY_EMAIL[email]) return TEAM_CODE_BY_EMAIL[email];
+  if (altEmail && TEAM_CODE_BY_EMAIL[altEmail]) return TEAM_CODE_BY_EMAIL[altEmail];
+  if (name && TEAM_CODE_BY_NAME[name]) return TEAM_CODE_BY_NAME[name];
+  return "—";
 }
 
 function parseDelimitedLine(line: string, delimiter: string): string[] {
@@ -462,11 +515,12 @@ export default function TeamPage() {
         cmp = trackCmp !== 0 ? trackCmp : a.name.localeCompare(b.name);
         break;
       }
-      case 1: cmp = a.name.localeCompare(b.name); break;
-      case 2: cmp = (a.email || "").localeCompare(b.email || ""); break;
-      case 3: cmp = (a.school || "").localeCompare(b.school || ""); break;
-      case 4: cmp = (a.grade || "").localeCompare(b.grade || ""); break;
-      case 5: cmp = (a.acceptedDate || "").localeCompare(b.acceptedDate || ""); break;
+      case 1: cmp = getMemberTeamCode(a).localeCompare(getMemberTeamCode(b)); break;
+      case 2: cmp = a.name.localeCompare(b.name); break;
+      case 3: cmp = (a.email || "").localeCompare(b.email || ""); break;
+      case 4: cmp = (a.school || "").localeCompare(b.school || ""); break;
+      case 5: cmp = (a.grade || "").localeCompare(b.grade || ""); break;
+      case 6: cmp = (a.acceptedDate || "").localeCompare(b.acceptedDate || ""); break;
       default: return 0;
     }
     return sortDir === "asc" ? cmp : -cmp;
@@ -624,16 +678,16 @@ export default function TeamPage() {
       <div
         className="relative bg-[#1C1F26] border border-white/8 rounded-xl overflow-x-auto select-text"
       >
-        <table className="w-full min-w-[980px] text-[11px] leading-4">
+        <table className="w-full min-w-[1060px] text-[11px] leading-4 table-fixed">
           <thead className="bg-[#0F1014] border-b border-white/8">
             <tr>
-              {["Track", "Name", "Email", "School", "Grade", "Date Accepted", "Actions"].map((col, idx) => {
-                const sortable = [0, 1, 2, 3, 4, 5].includes(idx);
+              {["Track", "Team", "Name", "Email", "School", "Grade", "Date Accepted", "Actions"].map((col, idx) => {
+                const sortable = [0, 1, 2, 3, 4, 5, 6].includes(idx);
                 const active = sortCol === idx;
                 return (
                   <th
                     key={col}
-                    className={`px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-white/45 whitespace-nowrap ${sortable ? "cursor-pointer select-none" : ""}`}
+                    className={`px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-white/45 whitespace-nowrap ${sortable ? "cursor-pointer select-none" : ""} ${col === "Track" || col === "Team" ? "w-[56px]" : ""} ${col === "Actions" ? "w-[120px]" : ""}`}
                     onClick={() => sortable && handleSort(idx)}
                   >
                     <span className="inline-flex items-center gap-1">
@@ -657,24 +711,28 @@ export default function TeamPage() {
                   <td className="px-2 py-1.5 whitespace-nowrap">
                     <span className="text-white/65 text-[10px] font-semibold">{track}</span>
                   </td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    <span className="text-white/65 text-[10px] font-semibold">{getMemberTeamCode(member)}</span>
+                  </td>
                   <td className="px-2 py-1.5">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatar.bg }}>
                         <span className="text-[10px] font-bold" style={{ color: avatar.text }}>{member.name[0]?.toUpperCase()}</span>
                       </div>
-                      <span className="text-white/90 font-medium">{member.name}</span>
+                      <span className="text-white/90 font-medium truncate whitespace-nowrap" title={member.name}>{member.name}</span>
                     </div>
                   </td>
                   <td className="px-2 py-1.5 whitespace-nowrap">
-                    <div className="font-mono">
-                      <p className="text-white/50">{member.email || "—"}</p>
-                      {member.alternateEmail && (
-                        <p className="text-white/30">{member.alternateEmail}</p>
-                      )}
-                    </div>
+                    <span
+                      className="font-mono text-white/50 block truncate"
+                      title={member.alternateEmail ? `${member.email || "—"} | ${member.alternateEmail}` : (member.email || "—")}
+                    >
+                      {member.email || "—"}
+                      {member.alternateEmail ? ` | ${member.alternateEmail}` : ""}
+                    </span>
                   </td>
                   <td className="px-2 py-1.5 whitespace-nowrap">
-                    <span className="text-white/50">{member.school || "—"}</span>
+                    <span className="text-white/50 block truncate" title={member.school || ""}>{member.school || "—"}</span>
                   </td>
                   <td className="px-2 py-1.5 whitespace-nowrap">
                     <span className="text-white/50">{member.grade || "—"}</span>
