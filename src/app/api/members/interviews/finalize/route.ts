@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbPatch, dbPush, dbRead, verifyCaller } from "@/lib/server/adminApi";
-import { createTransportForFrom } from "@/lib/server/smtp";
+import { createTransportForFrom, resolveFromWithName } from "@/lib/server/smtp";
 import { getAdminDB } from "@/lib/firebaseAdmin";
 import { buildAcceptanceTemplate } from "@/lib/server/applicantEmails";
 
@@ -79,7 +79,7 @@ async function sendAcceptanceEmail(input: {
     signupLink,
   });
   await transporter.sendMail({
-    from,
+    from: resolveFromWithName(from),
     replyTo,
     to: input.to,
     subject: tpl.subject,

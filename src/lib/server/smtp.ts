@@ -84,3 +84,37 @@ export function createTransportForFrom(fromAddress?: string) {
   return { transporter, profile };
 }
 
+/**
+ * Resolve a display-name-qualified "From" header for nodemailer.
+ *
+ * Looks up the env var EMAIL_FROM_NAMES which should be a comma-separated
+ * list of "email=Display Name" pairs, e.g.:
+ *   info@voltanyc.org=Volta,ethan@voltanyc.org=Ethan Zhang
+ *
+ * Falls back to TEAM_EMAIL_FROM_NAME (legacy) or "Volta NYC".
+ */
+export function resolveFromWithName(rawFrom: string): string {
+  const email = rawFrom.trim().toLowerCase();
+  if (!email) return rawFrom;
+
+  // Parse EMAIL_FROM_NAMES: "addr1=Name1,addr2=Name2"
+  const namesRaw = process.env.EMAIL_FROM_NAMES ?? "";
+  if (namesRaw.trim()) {
+    for (const pair of namesRaw.split(",")) {
+      const eqIdx = pair.indexOf("=");
+      if (eqIdx === -1) continue;
+      const addr = pair.slice(0, eqIdx).trim().toLowerCase();
+      const name = pair.slice(eqIdx + 1).trim();
+      if (addr === email && name) {
+        return `${name} <${email}>`;
+      }
+    }
+  }
+
+  // Fallback to TEAM_EMAIL_FROM_NAME (legacy compat)
+  const legacyName = (process.env.TEAM_EMAIL_FROM_NAME ?? "").trim();
+  if (legacyName) return `${legacyName} <${email}>`;
+
+  return email;
+}
+

@@ -1,4 +1,4 @@
-import { createTransportForFrom } from "@/lib/server/smtp";
+import { createTransportForFrom, resolveFromWithName } from "@/lib/server/smtp";
 import { buildInterviewInviteTemplate } from "@/lib/server/applicantEmails";
 import { formatInterviewInET, parseInterviewDateTime } from "@/lib/interviews/datetime";
 
@@ -107,8 +107,8 @@ async function sendInterviewEmail(input: {
     throw new Error("interview_email_from_not_configured");
   }
   const { transporter } = createTransportForFrom(configuredFrom);
-  const from = configuredFrom;
-  const replyTo = process.env.EMAIL_REPLY_TO ?? from;
+  const from = resolveFromWithName(configuredFrom);
+  const replyTo = process.env.EMAIL_REPLY_TO ?? configuredFrom;
 
   await transporter.sendMail({
     from,

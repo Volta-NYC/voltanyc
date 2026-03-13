@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyCaller } from "@/lib/server/adminApi";
-import { createTransportForFrom } from "@/lib/server/smtp";
+import { createTransportForFrom, resolveFromWithName } from "@/lib/server/smtp";
 
 type SendBody = {
   fromAddress?: string;
@@ -78,8 +78,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "smtp_not_configured" }, { status: 500 });
   }
 
-  const fromName = (process.env.TEAM_EMAIL_FROM_NAME ?? "Volta NYC").trim();
-  const from = `${fromName} <${selectedFrom}>`;
+  const from = resolveFromWithName(selectedFrom);
   const replyTo = selectedFrom;
   const textBody = contentMode === "html"
     ? stripHtml(message)

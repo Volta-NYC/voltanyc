@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyCaller } from "@/lib/server/adminApi";
-import { createTransportForFrom } from "@/lib/server/smtp";
+import { createTransportForFrom, resolveFromWithName } from "@/lib/server/smtp";
 import { buildAcceptanceTemplate } from "@/lib/server/applicantEmails";
 
 type Decision = "Accepted";
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
   const content = buildMessage(applicantName, decision, notes, role, tracks);
 
   await transporter.sendMail({
-    from,
+    from: resolveFromWithName(from),
     replyTo,
     to: applicantEmail,
     subject: content.subject,
