@@ -379,16 +379,23 @@ function normalizeTimestamp(value: unknown, fallbackIso?: string): string {
   return fallbackIso ?? nowISO();
 }
 
-function normalizeApplicationStatus(raw: string, hasScheduledInterview: boolean, hasCompletedInterview: boolean): ApplicationStatus {
+function normalizeApplicationStatus(
+  raw: string,
+  hasScheduledInterview: boolean,
+  hasCompletedInterview: boolean,
+  hasInviteSent: boolean,
+): ApplicationStatus {
   const key = raw.trim().toLowerCase();
-  if (key === "new") return "New";
-  if (key === "invited for interview") return "Invited for Interview";
-  if (key === "interview scheduled") return "Interview Scheduled";
-  if (key === "interview completed") return "Interview Completed";
-  if (key === "accepted") return "Accepted";
+  // Explicit status stored wins (except "new" — override if we have better signals)
   if (key === "not accepted" || key === "rejected") return "Not Accepted";
+  if (key === "accepted") return "Accepted";
+  if (key === "interview completed") return "Interview Completed";
+  if (key === "interview scheduled") return "Interview Scheduled";
+  if (key === "invited for interview") return "Invited for Interview";
+  // Auto-derive from signals
   if (hasCompletedInterview) return "Interview Completed";
   if (hasScheduledInterview) return "Interview Scheduled";
+  if (hasInviteSent) return "Invited for Interview";
   return "New";
 }
 
@@ -404,6 +411,9 @@ function normalizeApplicationRecord(id: string, row: Record<string, unknown>): A
       : {};
   const hasCompletedInterview = Object.keys(interviewEvaluations || {}).length > 0;
 
+  const interviewInviteSentAt = readLegacyText(row, ["interviewInviteSentAt"]);
+  const hasInviteSent = !!interviewInviteSentAt;
+
   return {
     id,
     fullName: readLegacyText(row, ["fullName", "Full Name", "name"]),
@@ -417,7 +427,7 @@ function normalizeApplicationRecord(id: string, row: Record<string, unknown>): A
     resumeUrl: readLegacyText(row, ["resumeUrl", "Resume URL"]),
     toolsSoftware: readLegacyText(row, ["toolsSoftware", "Tools/Software"]),
     accomplishment: readLegacyText(row, ["accomplishment", "Accomplishment"]),
-    status: normalizeApplicationStatus(readLegacyText(row, ["status"]), hasScheduledInterview, hasCompletedInterview),
+    status: normalizeApplicationStatus(readLegacyText(row, ["status"]), hasScheduledInterview, hasCompletedInterview, hasInviteSent),
     notes: readLegacyText(row, ["notes", "Notes"]),
     interviewInviteToken: readLegacyText(row, ["interviewInviteToken"]),
     interviewInviteSentAt: readLegacyText(row, ["interviewInviteSentAt"]),

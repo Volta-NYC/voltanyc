@@ -7,7 +7,6 @@ import { useAuth } from "@/lib/members/authContext";
 import {
   subscribeInterviewSlots,
   subscribeTeam,
-  subscribeApplications,
   createInterviewSlot,
   updateInterviewSlot,
   updateInterviewSettings,
@@ -356,7 +355,32 @@ function InterviewsContent() {
 
   useEffect(() => subscribeInterviewSlots(setSlots), []);
   useEffect(() => subscribeTeam(setTeamMembers), []);
-  useEffect(() => subscribeApplications(setApplications), []);
+
+  // Fetch applications from the server-side API (same as /applicants) so that
+  // resumeUrl, status, and interviewSlotId are computed with Admin SDK access
+  // and the same slot-cross-matching logic.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/members/applicants/list", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!res.ok || cancelled) return;
+        const data = await res.json() as { applications?: ApplicationRecord[] };
+        if (!cancelled && Array.isArray(data.applications)) {
+          setApplications(data.applications);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [user]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
