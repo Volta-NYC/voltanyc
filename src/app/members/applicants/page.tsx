@@ -19,6 +19,7 @@ const STATUS_OPTIONS: ApplicationStatus[] = [
   "New",
   "Invited for Interview",
   "Interview Scheduled",
+  "Interview Completed",
   "Accepted",
 ];
 
@@ -26,6 +27,7 @@ const STATUS_BADGE_CLASS: Record<string, string> = {
   "New": "bg-white/10 text-white/75 border border-white/20",
   "Invited for Interview": "bg-[#85CC17]/20 text-[#C4F135] border border-[#85CC17]/35",
   "Interview Scheduled": "bg-blue-500/20 text-blue-200 border border-blue-400/35",
+  "Interview Completed": "bg-purple-500/20 text-purple-200 border border-purple-400/35",
   "Accepted": "bg-emerald-500/20 text-emerald-200 border border-emerald-400/35",
   "Not Accepted": "bg-red-500/20 text-red-200 border border-red-400/35",
 };
@@ -1000,10 +1002,6 @@ export default function ApplicantsPage() {
           <tbody className="divide-y divide-white/5">
             {filtered.map((app) => {
               const latestInterview = matchBookedSlot(app);
-              const inviteSentAt = app.interviewInviteSentAt ? Date.parse(app.interviewInviteSentAt) : NaN;
-              const bookedAt = latestInterview ? Date.parse(latestInterview.datetime) : NaN;
-              const bookedAfterInvite = Number.isFinite(inviteSentAt) && Number.isFinite(bookedAt) && bookedAt >= inviteSentAt;
-              const evalCount = Object.keys((app.interviewEvaluations ?? {}) as Record<string, unknown>).length;
               const showResume = canViewResumeForApp(app);
               return (
                 <tr key={app.id} className="hover:bg-white/3 transition-colors">
@@ -1120,12 +1118,6 @@ export default function ApplicantsPage() {
                             {latestInterview ? (
                               <div className="text-white/65">
                                 <div className="whitespace-nowrap">{formatDateTime(latestInterview.datetime)}</div>
-                                {bookedAfterInvite ? (
-                                  <div className="text-[10px] text-emerald-300 mt-0.5">Booked after invite</div>
-                                ) : null}
-                                {evalCount > 0 ? (
-                                  <div className="text-[10px] text-white/40 mt-0.5">{evalCount} evaluation{evalCount > 1 ? "s" : ""}</div>
-                                ) : null}
                               </div>
                             ) : (
                               <span className="text-white/30">Not booked</span>

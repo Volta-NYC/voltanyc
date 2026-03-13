@@ -119,7 +119,10 @@ export async function POST(req: NextRequest) {
       ...evalEntry,
       slotId,
     }, verified.caller.idToken);
-    await dbPatch(`applications/${target.id}`, { updatedAt: new Date().toISOString() }, verified.caller.idToken);
+    await dbPatch(`applications/${target.id}`, { 
+      status: "Interview Completed",
+      updatedAt: new Date().toISOString() 
+    }, verified.caller.idToken);
   }
 
   return NextResponse.json({ success: true, applicationId: target?.id ?? "" });

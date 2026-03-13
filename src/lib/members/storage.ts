@@ -137,6 +137,7 @@ export type ApplicationStatus =
   | "New"
   | "Invited for Interview"
   | "Interview Scheduled"
+  | "Interview Completed"
   | "Accepted"
   | "Not Accepted"
   // Legacy values retained for backwards compatibility in older rows.
