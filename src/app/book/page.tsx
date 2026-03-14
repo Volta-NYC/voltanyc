@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import Image from "next/image";
 import type { InterviewSlot } from "@/lib/members/storage";
 import { formatInterviewInET, parseInterviewDateTime } from "@/lib/interviews/datetime";
 
@@ -266,9 +267,7 @@ export default function BookPage() {
       <div className="w-full max-w-lg">
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-[#85CC17] flex items-center justify-center">
-              <span className="text-[#0D0D0D] font-bold text-sm">V</span>
-            </div>
+            <Image src="/logo.png" alt="Volta" width={32} height={32} className="object-contain" />
             <span className="text-white font-bold text-lg tracking-tight">VOLTA NYC</span>
           </div>
           <p className="text-white/40 text-sm font-body">Interview Scheduling</p>

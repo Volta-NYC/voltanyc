@@ -48,49 +48,6 @@ function getTrackAvatarStyles(track: TrackKey): { bg: string; text: string } {
   }
 }
 
-const TEAM_CODE_BY_EMAIL: Record<string, string> = {
-  // Finance sub-teams
-  "iamalvinjiang@gmail.com": "Reports",
-  "shafeen873@gmail.com": "Reports",
-  "bruceweng374@gmail.com": "Reports",
-  "tsundrukn@gmail.com": "Reports",
-  "yubabhatta1@gmail.com": "Reports",
-  "peytonsyuen@gmail.com": "Reports",
-
-  "nafismahimofficial@gmail.com": "Grants",
-  "tylert4645@gmail.com": "Grants",
-  "joseph.long.nyc@gmail.com": "Grants",
-  "walterrz1230@gmail.com": "Grants",
-  "madaniremichaela@gmail.com": "Grants",
-  "ash28mui@gmail.com": "Grants",
-  "thakkar.jay2009@gmail.com": "Grants",
-
-  "linkevin246@gmail.com": "Outreach",
-  "jackywang397@gmail.com": "Outreach",
-  "angelinec085@gmail.com": "Outreach",
-  "tiffanyxu1294@gmail.com": "Outreach",
-  "ryanliu.contact@gmail.com": "Outreach",
-};
-
-const TEAM_CODE_BY_NAME: Record<string, string> = {
-  // Tech team sets
-  "eddie shah": "T1",
-  "maahika chitagi": "T1",
-  "shokhjakhon samiev": "T1",
-
-  "aarav sharma": "T2",
-  "arnob paul": "T2",
-  "batuhan sekeroglu": "T2",
-
-  "ronghe guo": "T3",
-  "peter predolac": "T3",
-  "xiang li": "T3",
-
-  "akhil rao": "T4",
-  "mohammad ehan khan": "T4",
-  "nelson guo": "T4",
-};
-
 const TRACK_SORT_ORDER: Record<TrackKey, number> = {
   Finance: 0,
   Marketing: 1,
@@ -118,16 +75,6 @@ function normalizeText(v: string): string {
 
 function normalizeKey(v: string): string {
   return normalizeText(v).toLowerCase();
-}
-
-function getMemberTeamCode(member: TeamMember): string {
-  const email = normalizeKey(member.email ?? "");
-  const altEmail = normalizeKey(member.alternateEmail ?? "");
-  const name = normalizeKey(member.name ?? "");
-  if (email && TEAM_CODE_BY_EMAIL[email]) return TEAM_CODE_BY_EMAIL[email];
-  if (altEmail && TEAM_CODE_BY_EMAIL[altEmail]) return TEAM_CODE_BY_EMAIL[altEmail];
-  if (name && TEAM_CODE_BY_NAME[name]) return TEAM_CODE_BY_NAME[name];
-  return "—";
 }
 
 function parseDelimitedLine(line: string, delimiter: string): string[] {
@@ -512,10 +459,10 @@ export default function TeamPage() {
       case 0: {
         const trackCmp = TRACK_SORT_ORDER[getMemberTrack(a)] - TRACK_SORT_ORDER[getMemberTrack(b)];
         if (trackCmp !== 0) return trackCmp;
-        const teamCmp = getMemberTeamCode(a).localeCompare(getMemberTeamCode(b));
+        const teamCmp = (a.pod || "—").localeCompare(b.pod || "—");
         return teamCmp !== 0 ? teamCmp : a.name.localeCompare(b.name);
       }
-      case 1: return getMemberTeamCode(a).localeCompare(getMemberTeamCode(b));
+      case 1: return (a.pod || "—").localeCompare(b.pod || "—");
       case 2: return a.name.localeCompare(b.name);
       case 3: return (a.email || "").localeCompare(b.email || "");
       case 4: return (a.school || "").localeCompare(b.school || "");
@@ -573,12 +520,12 @@ export default function TeamPage() {
     new Set(team.map((member) => (member.role ?? "").trim()).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b));
   const commsTeamOptions = Array.from(
-    new Set(team.map((member) => getMemberTeamCode(member)).filter((value) => value && value !== "—"))
+    new Set(team.map((member) => member.pod).filter((value) => value && value !== "—"))
   ).sort((a, b) => a.localeCompare(b));
 
   const commsFilteredMembers = team.filter((member) => {
     const divisions = member.divisions ?? [];
-    const teamCode = getMemberTeamCode(member);
+    const teamCode = member.pod || "—";
     const divisionMatch = commsDivisions.length === 0 || divisions.some((d) => commsDivisions.includes(d));
     const schoolMatch = commsSchools.length === 0 || commsSchools.includes((member.school ?? "").trim());
     const roleMatch = commsRoles.length === 0 || commsRoles.includes((member.role ?? "").trim());
@@ -807,7 +754,7 @@ export default function TeamPage() {
                     <span className="text-white/65 text-[10px] font-semibold">{track}</span>
                   </td>
                   <td className="px-2 py-1.5 whitespace-nowrap">
-                    <span className="text-white/65 text-[10px] font-semibold">{getMemberTeamCode(member)}</span>
+                    <span className="text-white/65 text-[10px] font-semibold">{member.pod || "—"}</span>
                   </td>
                   <td className="px-2 py-1.5">
                     <div className="flex items-center gap-2 min-w-0">
@@ -1005,6 +952,9 @@ export default function TeamPage() {
           </Field>
           <Field label="School">
             <Input value={form.school} onChange={e => setField("school", e.target.value)} />
+          </Field>
+          <Field label="Team (Pod)">
+            <Input value={form.pod ?? ""} onChange={e => setField("pod", e.target.value)} placeholder="e.g. T1, Outreach" />
           </Field>
           <Field label="Grade">
             <select

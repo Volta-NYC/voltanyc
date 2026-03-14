@@ -151,13 +151,14 @@ function formatDateTime(value: string): string {
 
 // ── Column definitions ─────────────────────────────────────────────────────────
 
-type ColumnKey = "status" | "name" | "email" | "school" | "cityState" | "referral" | "tracks" | "resume" | "applied" | "invite" | "interview" | "evals" | "actions";
+type ColumnKey = "status" | "name" | "email" | "school" | "grade" | "cityState" | "referral" | "tracks" | "resume" | "applied" | "invite" | "interview" | "evals" | "actions";
 
 const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "status", label: "Status" },
   { key: "name", label: "Name" },
   { key: "email", label: "Email" },
   { key: "school", label: "School Name" },
+  { key: "grade", label: "Grade" },
   { key: "cityState", label: "City, State" },
   { key: "referral", label: "How They Heard" },
   { key: "tracks", label: "Tracks" },
@@ -176,6 +177,7 @@ const COLUMN_WIDTH: Partial<Record<ColumnKey, string>> = {
   name: "w-[120px]",
   email: "min-w-[260px]",
   school: "w-[140px]",
+  grade: "w-[90px]",
   cityState: "w-[100px]",
   referral: "w-[100px]",
   tracks: "w-[90px]",
@@ -985,6 +987,12 @@ export default function ApplicantsPage() {
                         return (
                           <td key={col.key} className="px-2 py-1.5 text-white/55 whitespace-nowrap">
                             <span className="block truncate" title={app.schoolName || ""}>{app.schoolName || "—"}</span>
+                          </td>
+                        );
+                      case "grade":
+                        return (
+                          <td key={col.key} className="px-2 py-1.5 text-white/55 whitespace-nowrap">
+                            <span className="block truncate" title={app.grade || ""}>{app.grade || "—"}</span>
                           </td>
                         );
                       case "cityState":
