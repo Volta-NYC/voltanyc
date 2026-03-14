@@ -118,10 +118,10 @@ function AccessCodesTab({ uid }: { uid: string }) {
             <button
               key="link"
               onClick={() => copySignupLink(code.code, code.id)}
-              className="text-[11px] text-white/55 hover:text-white/80 transition-colors font-mono truncate max-w-[320px] text-left"
+              className="text-xs text-[#85CC17]/70 hover:text-[#85CC17] transition-colors font-body whitespace-nowrap"
               title={inviteLink}
             >
-              {copiedCodeId === code.id ? <span className="text-[#85CC17]">Copied!</span> : inviteLink}
+              {copiedCodeId === code.id ? "Copied!" : "Copy Link"}
             </button>,
             <Badge key="role" label={code.role} />,
             <span key="exp" className="text-white/70 text-xs whitespace-nowrap">{code.expiresAt.trim().toLowerCase() === "never" ? "Never" : code.expiresAt}</span>,
