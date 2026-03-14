@@ -887,6 +887,37 @@ function InterviewsContent() {
     }
   };
 
+  const deleteEvaluation = async () => {
+    if (!evaluationSlot || !user) return;
+    ask(async () => {
+      setSavingEvaluation(true);
+      setEvaluationMessage(null);
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/members/interviews/evaluate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            slotId: evaluationSlot.id,
+            action: "delete",
+          }),
+        });
+        if (!res.ok) throw new Error("delete_failed");
+        setEvaluationMessage("Evaluation deleted.");
+        setTimeout(() => setEvaluationMessage(null), 2200);
+        setEvaluationSlot(null);
+      } catch {
+        setEvaluationMessage("Could not delete evaluation.");
+        setTimeout(() => setEvaluationMessage(null), 2200);
+      } finally {
+        setSavingEvaluation(false);
+      }
+    }, "Are you sure you want to delete this evaluation?");
+  };
+
   const finalizeAcceptedFromSlot = async () => {
     if (!finalizeSlot || !user) return;
     setFinalizing(true);
@@ -1719,11 +1750,9 @@ function InterviewsContent() {
                         <td className="px-2 py-1.5 text-white/55 font-mono">{slot.bookerEmail || "—"}</td>
                         <td className="px-2 py-1.5 text-white/65 whitespace-nowrap">{formatDateTime(slot.datetime)}</td>
                         <td className="px-2 py-1.5 text-white/50 whitespace-nowrap">{slotInterviewers.length > 0 ? slotInterviewers.join(", ") : "—"}</td>
-                        <td className="px-2 py-1.5">
+                        <td className="px-2 py-1.5 text-center">
                           {evalCount > 0 ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wider bg-[#85CC17]/15 text-[#C4F135] border border-[#85CC17]/25">
-                              <span className="w-1 h-1 rounded-full bg-[#C4F135] inline-block" />Eval
-                            </span>
+                            <div className="w-2.5 h-2.5 rounded-full bg-[#85CC17] inline-block shadow-[0_0_8px_rgba(133,204,23,0.4)]" title="Evaluation submitted" />
                           ) : (
                             <span className="text-white/20">—</span>
                           )}
@@ -1813,11 +1842,9 @@ function InterviewsContent() {
                         <td className="px-2 py-1.5 text-white/55 font-mono">{slot.bookerEmail || "—"}</td>
                         <td className="px-2 py-1.5 text-white/65 whitespace-nowrap">{formatDateTime(slot.datetime)}</td>
                         <td className="px-2 py-1.5 text-white/50 whitespace-nowrap">{slotInterviewers.length > 0 ? slotInterviewers.join(", ") : "—"}</td>
-                        <td className="px-2 py-1.5">
+                        <td className="px-2 py-1.5 text-center">
                           {evalCount > 0 ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wider bg-[#85CC17]/15 text-[#C4F135] border border-[#85CC17]/25">
-                              <span className="w-1 h-1 rounded-full bg-[#C4F135] inline-block" />Eval
-                            </span>
+                            <div className="w-2.5 h-2.5 rounded-full bg-[#85CC17] inline-block shadow-[0_0_8px_rgba(133,204,23,0.4)]" title="Evaluation submitted" />
                           ) : (
                             <span className="text-white/20">—</span>
                           )}
@@ -2486,11 +2513,20 @@ function InterviewsContent() {
           </Field>
           {evaluationMessage && <p className="text-xs text-white/55">{evaluationMessage}</p>}
         </div>
-        <div className="flex justify-end gap-2 mt-5">
-          <Btn variant="ghost" onClick={() => setEvaluationSlot(null)} disabled={savingEvaluation}>Cancel</Btn>
-          <Btn variant="primary" onClick={() => void saveEvaluation()} disabled={savingEvaluation}>
-            {savingEvaluation ? "Saving..." : "Save Evaluation"}
-          </Btn>
+        <div className="flex justify-between items-center mt-5">
+          <div>
+            {evaluationSlot && user?.uid && evaluationSlot.evaluationByUid?.[user.uid] && (
+              <Btn variant="danger" onClick={() => void deleteEvaluation()} disabled={savingEvaluation}>
+                Delete
+              </Btn>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Btn variant="ghost" onClick={() => setEvaluationSlot(null)} disabled={savingEvaluation}>Cancel</Btn>
+            <Btn variant="primary" onClick={() => void saveEvaluation()} disabled={savingEvaluation}>
+              {savingEvaluation ? "Saving..." : "Save"}
+            </Btn>
+          </div>
         </div>
       </Modal>
 

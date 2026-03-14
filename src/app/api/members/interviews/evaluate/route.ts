@@ -7,6 +7,7 @@ type EvaluateBody = {
   slotId?: string;
   rating?: Rating;
   comments?: string;
+  action?: "save" | "delete";
 };
 
 type SlotRecord = Record<string, unknown>;
@@ -81,9 +82,9 @@ export async function POST(req: NextRequest) {
   const slotId = (body.slotId ?? "").trim();
   const rating = (body.rating ?? "").trim() as Rating;
   const comments = (body.comments ?? "").trim();
+  const action = body.action || "save";
 
-  const validRatings: Rating[] = ["Extremely Qualified", "Qualified", "Decent", "Unqualified"];
-  if (!slotId || !rating || !validRatings.includes(rating)) {
+  if (!slotId) {
     return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
   }
 
@@ -92,6 +93,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "slot_not_found" }, { status: 404 });
   }
   const slot: SlotRecord = { ...(slotData as SlotRecord), id: slotId };
+
+  if (action === "delete") {
+    await dbPatch(`interviewSlots/${slotId}`, {
+      [`evaluationByUid/${verified.caller.uid}`]: null
+    }, verified.caller.idToken);
+
+    const appsData = await dbRead("applications", verified.caller.idToken);
+    const entries = Object.entries((appsData ?? {}) as Record<string, Record<string, unknown>>)
+      .map(([id, row]) => ({ id, row: row ?? {} }));
+    const target = pickApplicationBySlot(slot, entries);
+    
+    if (target) {
+      await dbPatch(`applications/${target.id}`, {
+        [`interviewEvaluations/${verified.caller.uid}`]: null
+      }, verified.caller.idToken);
+    }
+    
+    return NextResponse.json({ success: true, deleted: true });
+  }
+
+  const validRatings: Rating[] = ["Extremely Qualified", "Qualified", "Decent", "Unqualified"];
+  if (!rating || !validRatings.includes(rating)) {
+    return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
+  }
+
   if (!slot.bookedBy || !slot.bookerEmail) {
     return NextResponse.json({ error: "slot_not_booked" }, { status: 409 });
   }

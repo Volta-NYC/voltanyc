@@ -1132,15 +1132,13 @@ export default function ApplicantsPage() {
                       case "evals": {
                         const hasEval = Object.keys(app.interviewEvaluations || {}).length > 0;
                         return (
-                          <td key={col.key} className="px-2 py-1.5">
+                          <td key={col.key} className="px-2 py-1.5 text-center">
                             {hasEval ? (
                               <button
                                 onClick={() => setViewingEvaluationsApp(app)}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wider bg-[#85CC17]/15 text-[#C4F135] border border-[#85CC17]/25 hover:bg-[#85CC17]/25 transition-colors"
+                                className="w-2.5 h-2.5 rounded-full bg-[#85CC17] inline-block shadow-[0_0_8px_rgba(133,204,23,0.4)] hover:shadow-[0_0_12px_rgba(133,204,23,0.6)] transition-shadow"
                                 title="Click to view evaluation"
-                              >
-                                <span className="w-1 h-1 rounded-full bg-[#C4F135] inline-block" />Eval
-                              </button>
+                              />
                             ) : (
                               <span className="text-white/20">—</span>
                             )}
