@@ -183,7 +183,7 @@ export async function GET(req: NextRequest) {
         hasCompletedInterview: hasPassedInterview || hasEvaluations,
         hasScheduledInterview: !!(rowSlotId || rowScheduledAt || hasMatchedBookedSlot),
         hasInviteSent,
-        isAccepted: isAcceptedFromTeam || normalizeKey(readText(safeRow, ["status"])) === "accepted",
+        isAccepted: isAcceptedFromTeam || normalize(readText(safeRow, ["status"])) === "accepted",
       });
     })
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
