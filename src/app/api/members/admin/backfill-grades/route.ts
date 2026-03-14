@@ -17,19 +17,23 @@ export async function POST(req: NextRequest) {
 
   let patched = 0;
 
-  for (const [teamId, member] of Object.entries(team) as any) {
-    if (member.grade && member.grade.trim() !== "") continue;
+  for (const [teamId, memberRaw] of Object.entries(team)) {
+    const member = memberRaw as Record<string, unknown>;
+    const memberGrade = String(member.grade || "");
+    if (memberGrade && memberGrade.trim() !== "") continue;
 
-    const email = (member.email || "").trim().toLowerCase();
-    const alt = (member.alternateEmail || "").trim().toLowerCase();
+    const email = String(member.email || "").trim().toLowerCase();
+    const alt = String(member.alternateEmail || "").trim().toLowerCase();
     let grade = "";
 
     // 1. match by email
-    for (const app of Object.values(apps) as any) {
-      const appEmail = (app.email || "").trim().toLowerCase();
+    for (const appRaw of Object.values(apps)) {
+      const app = appRaw as Record<string, unknown>;
+      const appEmail = String(app.email || "").trim().toLowerCase();
       if ((email && appEmail === email) || (alt && appEmail === alt)) {
-        if (app.grade && app.grade.trim() !== "") {
-          grade = app.grade.trim();
+        const appGrade = String(app.grade || "");
+        if (appGrade && appGrade.trim() !== "") {
+          grade = appGrade.trim();
           break;
         }
       }
@@ -37,10 +41,15 @@ export async function POST(req: NextRequest) {
 
     // 2. match by name
     if (!grade) {
-      for (const app of Object.values(apps) as any) {
-        if (app.fullName && member.name && app.fullName.trim().toLowerCase() === member.name.trim().toLowerCase()) {
-          if (app.grade && app.grade.trim() !== "") {
-            grade = app.grade.trim();
+      for (const appRaw of Object.values(apps)) {
+        const app = appRaw as Record<string, unknown>;
+        const appName = String(app.fullName || "");
+        const memberName = String(member.name || "");
+        
+        if (appName && memberName && appName.trim().toLowerCase() === memberName.trim().toLowerCase()) {
+          const appGrade = String(app.grade || "");
+          if (appGrade && appGrade.trim() !== "") {
+            grade = appGrade.trim();
             break;
           }
         }
