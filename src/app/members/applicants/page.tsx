@@ -200,7 +200,6 @@ export default function ApplicantsPage() {
   const [sendingInvites, setSendingInvites] = useState(false);
   const [sendingReminders, setSendingReminders] = useState(false);
   const [bulkPromoting, setBulkPromoting] = useState(false);
-  const [clearingEvals, setClearingEvals] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [hiddenColumns, setHiddenColumns] = useState<Set<ColumnKey>>(new Set());
   // Accept modal state
@@ -351,28 +350,23 @@ export default function ApplicantsPage() {
     const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
     return applications
       .filter((app) => {
+        // Must have been invited
         const sentAt = Date.parse(app.interviewInviteSentAt ?? "");
-        if (!sentAt || now - sentAt < twoDaysMs) return false;
+        if (!sentAt) return false;
+        // Must not be accepted/booked
+        if (["accepted"].includes(normalize(app.status))) return false;
         if (matchBookedSlot(app)) return false;
+        // Use the latest of invite or reminder timestamp for the 2-day check
         const remindedAt = Date.parse(app.interviewReminderSentAt ?? "");
-        return !remindedAt || remindedAt < sentAt;
+        const lastContactAt = remindedAt > sentAt ? remindedAt : sentAt;
+        return now - lastContactAt >= twoDaysMs;
       })
       .map((app) => app.id);
   }, [applications, matchBookedSlot]);
 
   const selectableFilteredIds = useMemo(() => filtered.map((app) => app.id), [filtered]);
 
-  const allNotBookedApplicantIds = useMemo(
-    () =>
-      applications
-        .filter((app) => {
-          if (["accepted", "waitlisted", "not accepted", "interview scheduled"].includes(normalize(app.status))) return false;
-          if (matchBookedSlot(app)) return false;
-          return true;
-        })
-        .map((app) => app.id),
-    [applications, matchBookedSlot]
-  );
+
 
   const updateApplicantServer = async (id: string, patch: Record<string, unknown>) => {
     if (!user) throw new Error("not_authenticated");
@@ -556,40 +550,14 @@ export default function ApplicantsPage() {
   };
 
   const remindUnbookedAfterTwoDays = async () => {
-    const now = Date.now();
-    const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
-    const targetIds = applications
-      .filter((app) => {
-        // 1. Must NOT be accepted, completed, waitlisted, or already scheduled
-        const status = (app.status ?? "").trim().toLowerCase();
-        if (["accepted", "completed", "interview scheduled", "waitlisted"].includes(status)) return false;
-
-        // 2. Must NOT have a matched booked slot
-        const bookedSlot = matchBookedSlot(app);
-        if (bookedSlot) return false;
-
-        // 3. Must have been invited
-        const originalSent = Date.parse(app.interviewInviteSentAt ?? "");
-        if (!originalSent) return false;
-
-        // 4. Must be at least 2 days since the *latest* invite (original or reminder)
-        const lastSent = app.interviewReminderSentAt 
-          ? Date.parse(app.interviewReminderSentAt) 
-          : originalSent;
-
-        if (now - lastSent < twoDaysMs) return false;
-        return true;
-      })
-      .map((app) => app.id);
-
-    if (targetIds.length === 0) {
+    if (unbookedReminderIds.length === 0) {
       setStatusMessage("No unbooked applicants need reminders right now.");
       return;
     }
 
     setSendingReminders(true);
     try {
-      const result = await sendInterviewInviteEmails(targetIds, "reminder");
+      const result = await sendInterviewInviteEmails(unbookedReminderIds, "reminder", true);
       setStatusMessage(`Reminder result — sent: ${result.sent}, skipped: ${result.skipped}, failed: ${result.failed}.`);
       await fetchApplicantsData();
     } catch {
@@ -599,76 +567,6 @@ export default function ApplicantsPage() {
     }
   };
 
-  const emailAllNotBooked = async () => {
-    if (!canEdit) return;
-    const unbookedApps = applications.filter((app) => (
-      !["accepted", "waitlisted", "not accepted", "interview scheduled"].includes(normalize(app.status))
-      && !matchBookedSlot(app)
-    ));
-    if (unbookedApps.length === 0) {
-      setStatusMessage("No unbooked applicants found.");
-      return;
-    }
-
-    const neverInvitedIds = unbookedApps
-      .filter((app) => !app.interviewInviteSentAt)
-      .map((app) => app.id);
-    const invitedNotBookedIds = unbookedApps
-      .filter((app) => !!app.interviewInviteSentAt)
-      .map((app) => app.id);
-
-    setSendingInvites(true);
-    setSendingReminders(true);
-    try {
-      let totalSent = 0;
-      let totalSkipped = 0;
-      let totalFailed = 0;
-
-      if (neverInvitedIds.length > 0) {
-        const initialResult = await sendInterviewInviteEmails(neverInvitedIds, "initial", false);
-        totalSent += initialResult.sent;
-        totalSkipped += initialResult.skipped;
-        totalFailed += initialResult.failed;
-      }
-      if (invitedNotBookedIds.length > 0) {
-        const reminderResult = await sendInterviewInviteEmails(invitedNotBookedIds, "reminder", true);
-        totalSent += reminderResult.sent;
-        totalSkipped += reminderResult.skipped;
-        totalFailed += reminderResult.failed;
-      }
-
-      setStatusMessage(`Email all not booked — sent: ${totalSent}, skipped: ${totalSkipped}, failed: ${totalFailed}.`);
-      await fetchApplicantsData();
-    } catch {
-      setStatusMessage("Could not email all unbooked applicants.");
-    } finally {
-      setSendingInvites(false);
-      setSendingReminders(false);
-    }
-  };
-
-  const clearBadEvals = async () => {
-    if (!user || !canDelete) return;
-    setClearingEvals(true);
-    try {
-      const token = await user.getIdToken();
-      const res = await fetch("/api/members/applicants/clear-evals", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json() as { success?: boolean; results?: string[] };
-      if (data.success) {
-        setStatusMessage(`Cleared: ${(data.results ?? []).join("; ") || "nothing to clear"}.`);
-        await fetchApplicantsData();
-      } else {
-        setStatusMessage("Clear evals failed.");
-      }
-    } catch {
-      setStatusMessage("Could not run eval cleanup.");
-    } finally {
-      setClearingEvals(false);
-    }
-  };
 
   const updateRowStatus = async (app: ApplicationRecord, nextStatus: ApplicationStatus) => {
     if (!canManageStatus) return;
@@ -908,27 +806,9 @@ export default function ApplicantsPage() {
           <Btn variant="secondary" onClick={remindUnbookedAfterTwoDays} disabled={sendingReminders || sendingInvites || unbookedReminderIds.length === 0} className={unbookedReminderIds.length === 0 ? "opacity-50" : ""}>
             {sendingReminders ? "Sending reminders..." : `Remind Unbooked (${unbookedReminderIds.length})`}
           </Btn>
-          <Btn
-            variant="secondary"
-            onClick={emailAllNotBooked}
-            disabled={sendingInvites || sendingReminders || allNotBookedApplicantIds.length === 0}
-            className={allNotBookedApplicantIds.length === 0 ? "opacity-50" : ""}
-          >
-            {sendingInvites || sendingReminders ? "Sending..." : `Email All Unbooked (${allNotBookedApplicantIds.length})`}
-          </Btn>
           <Btn variant="secondary" onClick={() => fileInputRef.current?.click()} disabled={importing}>
             {importing ? "Importing..." : "Import CSV"}
           </Btn>
-          {canDelete && (
-            <Btn
-              variant="secondary"
-              onClick={() => void clearBadEvals()}
-              disabled={clearingEvals}
-              className="opacity-60 hover:opacity-100"
-            >
-              {clearingEvals ? "Clearing..." : "Clear Evals (Aryan/Sarah)"}
-            </Btn>
-          )}
         </div>
       )}
 
@@ -1143,7 +1023,7 @@ export default function ApplicantsPage() {
                           </td>
                         );
                       case "evals": {
-                        const hasEval = Object.values(app.interviewEvaluations || {}).some(Boolean);
+                        const hasEval = Object.keys(app.interviewEvaluations || {}).length > 0;
                         return (
                           <td key={col.key} className="px-2 py-1.5 text-center">
                             {hasEval ? (
@@ -1162,23 +1042,20 @@ export default function ApplicantsPage() {
                         return (
                           <td key={col.key} className="px-2 py-1.5 text-white/45 whitespace-nowrap">{formatDateTime(app.createdAt)}</td>
                         );
-                      case "invite":
+                      case "invite": {
+                        const sentAt = app.interviewInviteSentAt ? Date.parse(app.interviewInviteSentAt) : 0;
+                        const remAt = app.interviewReminderSentAt ? Date.parse(app.interviewReminderSentAt) : 0;
+                        const latestTs = remAt > sentAt ? app.interviewReminderSentAt : app.interviewInviteSentAt;
                         return (
                           <td key={col.key} className="px-2 py-1.5">
-                            {app.interviewReminderSentAt ? (
-                              <div className="text-white/65 whitespace-nowrap">
-                                <span className="text-[10px] text-white/40 mr-1.5 uppercase tracking-wider font-semibold">Reminder</span>
-                                {formatDateTime(app.interviewReminderSentAt)}
-                              </div>
-                            ) : app.interviewInviteSentAt ? (
-                              <div className="text-white/65 whitespace-nowrap">
-                                {formatDateTime(app.interviewInviteSentAt)}
-                              </div>
+                            {latestTs ? (
+                              <span className="text-white/65 whitespace-nowrap">{formatDateTime(latestTs)}</span>
                             ) : (
                               <span className="text-white/30">Not sent</span>
                             )}
                           </td>
                         );
+                      }
                       case "interview":
                         return (
                           <td key={col.key} className="px-2 py-1.5">

@@ -278,6 +278,7 @@ export interface InterviewSlot {
   }>;
   recurringWeekly?: boolean;
   recurringSeriesId?: string;
+  noShow?: boolean;
   location?: string;
   createdBy: string;      // uid
   createdAt: number;      // Unix ms timestamp

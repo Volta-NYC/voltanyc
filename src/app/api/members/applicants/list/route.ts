@@ -160,7 +160,7 @@ export async function GET(req: NextRequest) {
         else if (appName && slotName && namesLikelyMatch(appName, slotName)) matched = true;
         
         if (matched) {
-          if (slot.datetime && new Date(String(slot.datetime)).getTime() < Date.now()) {
+          if (slot.datetime && new Date(String(slot.datetime)).getTime() < Date.now() && !slot.noShow) {
             hasPassedInterview = true;
           }
           return true;

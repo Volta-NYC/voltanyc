@@ -918,6 +918,28 @@ function InterviewsContent() {
     }, "Are you sure you want to delete this evaluation?");
   };
 
+  const markNoShow = async (slot: InterviewSlot) => {
+    if (!user) return;
+    ask(async () => {
+      try {
+        const token = await user.getIdToken();
+        await fetch("/api/members/interviews/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ slotId: slot.id, patch: { noShow: true } }),
+        });
+        setPastMessage(`Marked ${slot.bookerName || "interviewee"} as No Show.`);
+        setTimeout(() => setPastMessage(null), 2200);
+      } catch {
+        setPastMessage("Could not mark as no show.");
+        setTimeout(() => setPastMessage(null), 2200);
+      }
+    }, `Mark ${slot.bookerName || "this interviewee"} as a No Show?`);
+  };
+
   const finalizeAcceptedFromSlot = async () => {
     if (!finalizeSlot || !user) return;
     setFinalizing(true);
@@ -1743,7 +1765,8 @@ function InterviewsContent() {
                     const slotInterviewers = getSlotInterviewerNames(slot, memberNameById);
                     const resumeUrl = findResumeUrlForSlot(slot);
                     const matchedApp = findApplicationForSlot(slot);
-                    const evalCount = Object.values((matchedApp?.interviewEvaluations ?? {}) as Record<string, unknown>).filter(Boolean).length;
+                    const evalCount = Object.keys(slot.evaluationByUid ?? {}).length
+                      || Object.keys((matchedApp?.interviewEvaluations ?? {}) as Record<string, unknown>).length;
                     return (
                       <tr key={slot.id} className="hover:bg-white/3 transition-colors">
                         <td className="px-2 py-1.5 text-white/90 font-medium whitespace-nowrap">{displayName}</td>
@@ -1782,6 +1805,7 @@ function InterviewsContent() {
                             ) : currentInterviewerMemberIds.some((mid) => slot.interviewerMemberIds?.includes(mid)) ? (
                               <>
                                 <Btn size="sm" variant="secondary" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => openEvaluation(slot)}>Evaluate</Btn>
+                                <Btn size="sm" variant="ghost" className="!px-2 !py-0.5 !text-[10px] leading-none text-orange-400" onClick={() => void markNoShow(slot)}>No Show</Btn>
                               </>
                             ) : null}
                           </div>
@@ -1814,7 +1838,7 @@ function InterviewsContent() {
               <table className="w-full text-[11px] leading-4">
                 <thead className="bg-[#0F1014] border-b border-white/8">
                   <tr>
-                    {["Name", "Email", "Time", "Interviewer(s)", "Evals", "Resume", "Actions"].map((col) => (
+                    {["Name", "Email", "Time", "Interviewer(s)", "Eval", "Resume", "Actions"].map((col) => (
                       <th key={col} className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-white/45 whitespace-nowrap">
                         <span className="inline-flex items-center gap-0.5">
                           {col}
@@ -1835,7 +1859,8 @@ function InterviewsContent() {
                     const slotInterviewers = getSlotInterviewerNames(slot, memberNameById);
                     const resumeUrl = findResumeUrlForSlot(slot);
                     const matchedApp = findApplicationForSlot(slot);
-                    const evalCount = Object.values((matchedApp?.interviewEvaluations ?? {}) as Record<string, unknown>).filter(Boolean).length;
+                    const evalCount = Object.keys(slot.evaluationByUid ?? {}).length
+                      || Object.keys((matchedApp?.interviewEvaluations ?? {}) as Record<string, unknown>).length;
                     return (
                       <tr key={slot.id} className="hover:bg-white/3 transition-colors">
                         <td className="px-2 py-1.5 text-white/90 font-medium whitespace-nowrap">{displayName}</td>
@@ -1867,6 +1892,12 @@ function InterviewsContent() {
                           <div className="flex gap-1 flex-nowrap">
                             {(canDeleteInterviews || currentInterviewerMemberIds.some((mid) => slot.interviewerMemberIds?.includes(mid))) && (
                               <Btn size="sm" variant="secondary" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => openEvaluation(slot)}>Evaluate</Btn>
+                            )}
+                            {(canDeleteInterviews || currentInterviewerMemberIds.some((mid) => slot.interviewerMemberIds?.includes(mid))) && !slot.noShow && (
+                              <Btn size="sm" variant="ghost" className="!px-2 !py-0.5 !text-[10px] leading-none text-orange-400" onClick={() => void markNoShow(slot)}>No Show</Btn>
+                            )}
+                            {slot.noShow && (
+                              <span className="text-[10px] text-orange-400 font-semibold px-1">NO SHOW</span>
                             )}
                             {canDeleteInterviews && (
                               <Btn size="sm" variant="primary" className="!px-2 !py-0.5 !text-[10px] leading-none" onClick={() => setFinalizeSlot(slot)}>Accept</Btn>
