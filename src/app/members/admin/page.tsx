@@ -109,24 +109,23 @@ function AccessCodesTab({ uid }: { uid: string }) {
 
       {/* Existing codes table */}
       <Table
-        cols={["Code", "Link", "Role", "Expires", "Status", "Used By", "Actions"]}
+        cols={["Code", "Link", "Role", "Expires", "Status", "Actions"]}
         rows={sortedCodes.map(code => {
           const status = getCodeStatus(code);
           const inviteLink = `${typeof window !== "undefined" ? window.location.origin : ""}/members/signup?code=${encodeURIComponent(code.code)}`;
           return [
-            <span key="code" className="font-mono text-white tracking-widest text-sm">{code.code}</span>,
+            <span key="code" className="font-mono text-white tracking-widest text-sm whitespace-nowrap">{code.code}</span>,
             <button
               key="link"
               onClick={() => copySignupLink(code.code, code.id)}
-              className="text-[10px] text-white/30 hover:text-white/60 transition-colors font-mono truncate max-w-[220px] text-left"
+              className="text-[11px] text-white/55 hover:text-white/80 transition-colors font-mono truncate max-w-[320px] text-left"
               title={inviteLink}
             >
               {copiedCodeId === code.id ? <span className="text-[#85CC17]">Copied!</span> : inviteLink}
             </button>,
             <Badge key="role" label={code.role} />,
-            <span key="exp" className="text-white/40 text-xs">{code.expiresAt.trim().toLowerCase() === "never" ? "Never" : code.expiresAt}</span>,
+            <span key="exp" className="text-white/70 text-xs whitespace-nowrap">{code.expiresAt.trim().toLowerCase() === "never" ? "Never" : code.expiresAt}</span>,
             <span key="status" className={`text-xs font-medium ${getCodeStatusColor(status)}`}>{status}</span>,
-            <span key="usedBy" className="text-white/30 text-xs">{code.usedBy ?? "—"}</span>,
             <div key="actions" className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <Btn size="sm" variant="danger" onClick={() => ask(async () => deleteInviteCode(code.id))}>Delete</Btn>
             </div>,
