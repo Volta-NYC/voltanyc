@@ -1743,7 +1743,7 @@ function InterviewsContent() {
                     const slotInterviewers = getSlotInterviewerNames(slot, memberNameById);
                     const resumeUrl = findResumeUrlForSlot(slot);
                     const matchedApp = findApplicationForSlot(slot);
-                    const evalCount = Object.keys((matchedApp?.interviewEvaluations ?? {}) as Record<string, unknown>).length;
+                    const evalCount = Object.values((matchedApp?.interviewEvaluations ?? {}) as Record<string, unknown>).filter(Boolean).length;
                     return (
                       <tr key={slot.id} className="hover:bg-white/3 transition-colors">
                         <td className="px-2 py-1.5 text-white/90 font-medium whitespace-nowrap">{displayName}</td>
@@ -1835,7 +1835,7 @@ function InterviewsContent() {
                     const slotInterviewers = getSlotInterviewerNames(slot, memberNameById);
                     const resumeUrl = findResumeUrlForSlot(slot);
                     const matchedApp = findApplicationForSlot(slot);
-                    const evalCount = Object.keys((matchedApp?.interviewEvaluations ?? {}) as Record<string, unknown>).length;
+                    const evalCount = Object.values((matchedApp?.interviewEvaluations ?? {}) as Record<string, unknown>).filter(Boolean).length;
                     return (
                       <tr key={slot.id} className="hover:bg-white/3 transition-colors">
                         <td className="px-2 py-1.5 text-white/90 font-medium whitespace-nowrap">{displayName}</td>

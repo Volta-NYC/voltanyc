@@ -560,12 +560,25 @@ export default function ApplicantsPage() {
     const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
     const targetIds = applications
       .filter((app) => {
-        const sentAt = Date.parse(app.interviewInviteSentAt ?? "");
-        if (!sentAt || now - sentAt < twoDaysMs) return false;
+        // 1. Must NOT be accepted, completed, waitlisted, or already scheduled
+        const status = (app.status ?? "").trim().toLowerCase();
+        if (["accepted", "completed", "interview scheduled", "waitlisted"].includes(status)) return false;
+
+        // 2. Must NOT have a matched booked slot
         const bookedSlot = matchBookedSlot(app);
         if (bookedSlot) return false;
-        const remindedAt = Date.parse(app.interviewReminderSentAt ?? "");
-        return !remindedAt || remindedAt < sentAt;
+
+        // 3. Must have been invited
+        const originalSent = Date.parse(app.interviewInviteSentAt ?? "");
+        if (!originalSent) return false;
+
+        // 4. Must be at least 2 days since the *latest* invite (original or reminder)
+        const lastSent = app.interviewReminderSentAt 
+          ? Date.parse(app.interviewReminderSentAt) 
+          : originalSent;
+
+        if (now - lastSent < twoDaysMs) return false;
+        return true;
       })
       .map((app) => app.id);
 
@@ -1130,7 +1143,7 @@ export default function ApplicantsPage() {
                           </td>
                         );
                       case "evals": {
-                        const hasEval = Object.keys(app.interviewEvaluations || {}).length > 0;
+                        const hasEval = Object.values(app.interviewEvaluations || {}).some(Boolean);
                         return (
                           <td key={col.key} className="px-2 py-1.5 text-center">
                             {hasEval ? (
@@ -1152,12 +1165,14 @@ export default function ApplicantsPage() {
                       case "invite":
                         return (
                           <td key={col.key} className="px-2 py-1.5">
-                            {app.interviewInviteSentAt ? (
-                              <div className="text-white/65">
-                                <div className="whitespace-nowrap">{formatDateTime(app.interviewInviteSentAt)}</div>
-                                {app.interviewReminderSentAt ? (
-                                  <div className="text-[10px] text-white/40 mt-0.5 whitespace-nowrap">Reminder: {formatDateTime(app.interviewReminderSentAt)}</div>
-                                ) : null}
+                            {app.interviewReminderSentAt ? (
+                              <div className="text-white/65 whitespace-nowrap">
+                                <span className="text-[10px] text-white/40 mr-1.5 uppercase tracking-wider font-semibold">Reminder</span>
+                                {formatDateTime(app.interviewReminderSentAt)}
+                              </div>
+                            ) : app.interviewInviteSentAt ? (
+                              <div className="text-white/65 whitespace-nowrap">
+                                {formatDateTime(app.interviewInviteSentAt)}
                               </div>
                             ) : (
                               <span className="text-white/30">Not sent</span>
