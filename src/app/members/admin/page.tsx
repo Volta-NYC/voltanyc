@@ -109,22 +109,25 @@ function AccessCodesTab({ uid }: { uid: string }) {
 
       {/* Existing codes table */}
       <Table
-        cols={["Code", "Role", "Expires", "Status", "Used By", "Actions"]}
+        cols={["Code", "Link", "Role", "Expires", "Status", "Used By", "Actions"]}
         rows={sortedCodes.map(code => {
           const status = getCodeStatus(code);
+          const inviteLink = `${typeof window !== "undefined" ? window.location.origin : ""}/members/signup?code=${encodeURIComponent(code.code)}`;
           return [
             <span key="code" className="font-mono text-white tracking-widest text-sm">{code.code}</span>,
+            <button
+              key="link"
+              onClick={() => copySignupLink(code.code, code.id)}
+              className="text-[10px] text-white/30 hover:text-white/60 transition-colors font-mono truncate max-w-[220px] text-left"
+              title={inviteLink}
+            >
+              {copiedCodeId === code.id ? <span className="text-[#85CC17]">Copied!</span> : inviteLink}
+            </button>,
             <Badge key="role" label={code.role} />,
             <span key="exp" className="text-white/40 text-xs">{code.expiresAt.trim().toLowerCase() === "never" ? "Never" : code.expiresAt}</span>,
             <span key="status" className={`text-xs font-medium ${getCodeStatusColor(status)}`}>{status}</span>,
             <span key="usedBy" className="text-white/30 text-xs">{code.usedBy ?? "—"}</span>,
             <div key="actions" className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={() => copySignupLink(code.code, code.id)}
-                className="text-xs text-[#85CC17]/70 hover:text-[#85CC17] transition-colors font-body"
-              >
-                {copiedCodeId === code.id ? "Copied!" : "Copy Link"}
-              </button>
               <Btn size="sm" variant="danger" onClick={() => ask(async () => deleteInviteCode(code.id))}>Delete</Btn>
             </div>,
           ];
