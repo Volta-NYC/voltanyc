@@ -4,7 +4,7 @@ import Link from "next/link";
 import AnimatedSection from "@/components/AnimatedSection";
 import { MapPinIcon } from "@/components/Icons";
 import { projects as fallbackProjects, joinTracks } from "@/data";
-import { neighborhoods } from "@/components/NeighborhoodMap";
+import { neighborhoods } from "@/data/neighborhoods";
 import { VOLTA_STATS, formatStat } from "@/data/stats";
 import { getPublicShowcaseCards } from "@/lib/server/publicShowcase";
 
