@@ -7,6 +7,14 @@ const config: Config = {
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/data/**/*.{js,ts}",
   ],
+  safelist: [
+    "bg-v-green",
+    "bg-v-blue",
+    "bg-orange-400",
+    "bg-amber-400",
+    "bg-pink-400",
+    "bg-purple-400"
+  ],
   theme: {
     extend: {
       colors: {
