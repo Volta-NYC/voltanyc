@@ -263,7 +263,7 @@ export default function BusinessesPage() {
       payload.showcaseDescription = (form.showcaseDescription ?? "").trim();
       payload.showcaseUrl = (form.showcaseUrl ?? "").trim();
       payload.showcaseImageUrl = (form.showcaseImageUrl ?? "").trim();
-      payload.showcaseColor = DIVISION_SHOWCASE_COLOR[form.division ?? "Tech"];
+      payload.showcaseColor = form.showcaseColor ?? DIVISION_SHOWCASE_COLOR[form.division ?? "Tech"];
     } else {
       payload.showcaseFeaturedOnHome = false;
     }
@@ -934,6 +934,13 @@ export default function BusinessesPage() {
               </Field>
               <Field label="Card Status">
                 <Select options={SHOWCASE_STATUSES} value={form.showcaseStatus ?? "In Progress"} onChange={e => setField("showcaseStatus", e.target.value)} />
+              </Field>
+              <Field label="Card Color">
+                <Select
+                  options={["green", "blue", "orange", "amber", "pink", "purple"]}
+                  value={form.showcaseColor ?? "green"}
+                  onChange={e => setField("showcaseColor", e.target.value)}
+                />
               </Field>
               <Field label="Sort Order">
                 <Input
