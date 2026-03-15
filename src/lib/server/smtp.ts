@@ -36,8 +36,14 @@ export function resolveSmtpProfile(fromAddress?: string): {
   usingSecondary: boolean;
 } {
   const normalizedFrom = normalizeEmail(fromAddress ?? "");
+  const primaryFrom = normalizeEmail(process.env.EMAIL_FROM ?? "info@voltanyc.org");
   const secondaryFromSet = getSecondaryFromSet();
-  const wantsSecondary = normalizedFrom && secondaryFromSet.has(normalizedFrom);
+  
+  const hasSecondaryCreds = !!process.env.SMTP_USER_SECONDARY && !!process.env.SMTP_PASS_SECONDARY;
+  const isExplicitSecondary = normalizedFrom && secondaryFromSet.has(normalizedFrom);
+  const isImplicitSecondary = normalizedFrom && normalizedFrom !== primaryFrom && hasSecondaryCreds;
+  
+  const wantsSecondary = isExplicitSecondary || isImplicitSecondary;
 
   if (wantsSecondary) {
     const user = process.env.SMTP_USER_SECONDARY ?? "";
