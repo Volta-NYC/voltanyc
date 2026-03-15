@@ -17,7 +17,6 @@ export interface PublicShowcaseCard {
   url?: string;
   imageUrl?: string;
   featuredOnHome: boolean;
-  order: number;
 }
 
 function asText(value: unknown): string {
@@ -133,8 +132,6 @@ function normalizeDescription(value: unknown, fallback: string): string {
 }
 
 function compareCards(a: PublicShowcaseCard, b: PublicShowcaseCard): number {
-  const orderDiff = a.order - b.order;
-  if (orderDiff !== 0) return orderDiff;
   return a.name.localeCompare(b.name);
 }
 
@@ -165,7 +162,6 @@ export async function getPublicShowcaseCards(): Promise<PublicShowcaseCard[]> {
     const color = asText(row.showcaseColor)
       ? normalizeColor(row.showcaseColor)
       : defaultColorFromDivision(division);
-    const order = asNumber(row.showcaseOrder, 9999);
     const featuredOnHome = asBool(row.showcaseFeaturedOnHome, status !== "Upcoming");
 
     const card: PublicShowcaseCard = {
@@ -180,7 +176,6 @@ export async function getPublicShowcaseCards(): Promise<PublicShowcaseCard[]> {
       url: url || undefined,
       imageUrl: imageUrl || undefined,
       featuredOnHome,
-      order,
     };
 
     if (asBool(row.showcaseEnabled, false)) {

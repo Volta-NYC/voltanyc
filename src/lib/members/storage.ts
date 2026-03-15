@@ -65,7 +65,6 @@ export interface Business {
   // Public-site showcase configuration (optional, managed in Projects UI).
   showcaseEnabled?: boolean;
   showcaseFeaturedOnHome?: boolean;
-  showcaseOrder?: number;
   showcaseName?: string;
   showcaseType?: string;
   showcaseNeighborhood?: string;

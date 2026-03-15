@@ -119,7 +119,6 @@ const BLANK_FORM: Omit<Business, "id" | "createdAt" | "updatedAt"> = {
   teamMembers: [],
   showcaseEnabled: false,
   showcaseFeaturedOnHome: true,
-  showcaseOrder: 1000,
   showcaseName: "",
   showcaseType: "",
   showcaseNeighborhood: "",
@@ -185,7 +184,6 @@ export default function BusinessesPage() {
       teamMembers:    b.teamMembers     ?? [],
       showcaseEnabled: !!b.showcaseEnabled,
       showcaseFeaturedOnHome: b.showcaseFeaturedOnHome ?? true,
-      showcaseOrder: b.showcaseOrder ?? 1000,
       showcaseName: b.showcaseName ?? "",
       showcaseType: b.showcaseType ?? "",
       showcaseNeighborhood: b.showcaseNeighborhood ?? "",
@@ -254,7 +252,6 @@ export default function BusinessesPage() {
 
     if (showcaseEnabled) {
       payload.showcaseFeaturedOnHome = !!form.showcaseFeaturedOnHome;
-      payload.showcaseOrder = Number(form.showcaseOrder ?? 1000);
       payload.showcaseName = (form.showcaseName ?? "").trim();
       payload.showcaseType = DIVISION_PUBLIC_LABEL[form.division ?? "Tech"] ?? "Digital & Tech";
       payload.showcaseNeighborhood = (form.showcaseNeighborhood ?? "").trim();
@@ -277,7 +274,6 @@ export default function BusinessesPage() {
         githubUrl: null as unknown as string,
         driveFolderUrl: null as unknown as string,
         clientNotes: null as unknown as string,
-        showcaseOrder: showcaseEnabled ? payload.showcaseOrder : (null as unknown as number),
         showcaseName: showcaseEnabled ? payload.showcaseName : (null as unknown as string),
         showcaseType: showcaseEnabled ? payload.showcaseType : (null as unknown as string),
         showcaseNeighborhood: showcaseEnabled ? payload.showcaseNeighborhood : (null as unknown as string),
@@ -386,7 +382,6 @@ export default function BusinessesPage() {
           intakeSource: "website_form",
           showcaseEnabled: false,
           showcaseFeaturedOnHome: false,
-          showcaseOrder: 1000,
           showcaseName: "",
           showcaseType: "",
           showcaseNeighborhood: "",
@@ -940,13 +935,6 @@ export default function BusinessesPage() {
                   options={["green", "blue", "orange", "amber", "pink", "purple"]}
                   value={form.showcaseColor ?? "green"}
                   onChange={e => setField("showcaseColor", e.target.value)}
-                />
-              </Field>
-              <Field label="Sort Order">
-                <Input
-                  type="number"
-                  value={String(form.showcaseOrder ?? 1000)}
-                  onChange={e => setField("showcaseOrder", Number(e.target.value || 1000))}
                 />
               </Field>
               <Field label="Image Link">
