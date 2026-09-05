@@ -294,19 +294,29 @@ async function LiveHomeStats() {
   return <HomeStats stats={liveHomeStats} />;
 }
 
-function FlagshipPartnerCard({ partner }: { partner: CommunityPartner }) {
+function FlagshipPartnerCard({
+  partner,
+  className = "",
+  isDuplicate = false,
+}: {
+  partner: CommunityPartner;
+  className?: string;
+  isDuplicate?: boolean;
+}) {
   return (
     <a
       href={partner.website}
       target="_blank"
       rel="noreferrer"
-      aria-label={`Visit ${partner.name} website`}
-      className="bg-white border-2 border-n-orange/35 rounded-xl px-5 py-5 min-h-[164px] flex flex-col items-center justify-center text-center no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-n-orange/50 focus-visible:ring-offset-2"
+      aria-label={isDuplicate ? undefined : `Visit ${partner.name} website`}
+      aria-hidden={isDuplicate || undefined}
+      tabIndex={isDuplicate ? -1 : undefined}
+      className={`bg-white border-2 border-n-orange/35 rounded-xl px-5 py-5 min-h-[164px] flex flex-col items-center justify-center text-center no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-n-orange/50 focus-visible:ring-offset-2 ${className}`}
     >
       <div className="relative w-full h-[78px] mb-4">
         <Image
           src={partner.logo}
-          alt={`${partner.name} logo`}
+          alt={isDuplicate ? "" : `${partner.name} logo`}
           fill
           sizes="(max-width: 640px) 45vw, 180px"
           className={getPartnerLogoClass(partner, "object-contain p-1")}
@@ -407,6 +417,31 @@ function PartnerMarquee({
   );
 }
 
+// Mobile-only. Five full-width cards stacked vertically pushed the scrolling
+// partner rows most of a screen further down, so on narrow viewports the same
+// cards ride a marquee instead. Runs rightward because the two rows beneath it
+// run left then right, and a shared direction reads as one sliding mass.
+function FlagshipPartnerMarquee({ partners }: { partners: CommunityPartner[] }) {
+  return (
+    <div className="partner-marquee -mx-5 overflow-hidden py-1 sm:hidden">
+      <div className="partner-marquee-track partner-marquee-track-reverse partner-marquee-track-flagship flex gap-3">
+        {[0, 1].map((copy) => (
+          <div key={copy} className="flex gap-3" aria-hidden={copy === 1}>
+            {partners.map((partner) => (
+              <FlagshipPartnerCard
+                key={`${copy}-${partner.name}`}
+                partner={partner}
+                className="w-[240px] shrink-0"
+                isDuplicate={copy === 1}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 async function CommunityPartnersSection() {
   const partners = await getPublicCommunityPartners();
   const partnerByName = new Map(partners.map((partner) => [partner.name, partner]));
@@ -440,9 +475,23 @@ async function CommunityPartnersSection() {
               className="pointer-events-none absolute -inset-x-16 top-12 bottom-0 z-0 bg-[radial-gradient(ellipse_at_center,rgba(35,31,36,0.08)_0%,rgba(35,31,36,0.035)_40%,transparent_72%)] blur-2xl"
             />
             <div className="relative z-10 space-y-2 md:space-y-3">
-              <div className="grid grid-cols-1 gap-3 py-1 sm:grid-cols-2 md:gap-4 lg:grid-cols-5">
+              <FlagshipPartnerMarquee partners={flagshipPartners} />
+              <div className="hidden gap-3 py-1 sm:grid sm:grid-cols-2 md:gap-4 lg:grid-cols-5">
                 {flagshipPartners.map((partner, index) => (
-                  <AnimatedSection key={partner.name} delay={index * 0.055} duration={0.32}>
+                  <AnimatedSection
+                    key={partner.name}
+                    delay={index * 0.055}
+                    duration={0.32}
+                    // An odd count leaves the last card alone on the bottom row of
+                    // the two-column band, hugging the left edge as if a sibling
+                    // failed to load. Span both columns and centre it at exactly
+                    // one column's width so it still matches the cards above.
+                    className={
+                      flagshipPartners.length % 2 === 1 && index === flagshipPartners.length - 1
+                        ? "sm:col-span-2 sm:mx-auto sm:w-[calc(50%-0.375rem)] md:w-[calc(50%-0.5rem)] lg:col-span-1 lg:mx-0 lg:w-auto"
+                        : undefined
+                    }
+                  >
                     <FlagshipPartnerCard partner={partner} />
                   </AnimatedSection>
                 ))}

@@ -1180,6 +1180,14 @@ body:has(.home-scroll-story) footer::before {
   animation-duration: 48s;
 }
 
+/* The flagship row carries five 240px cards instead of a dozen small logos, so
+   one loop covers far less distance. At the shared duration it reads as almost
+   stationary; this restores a comparable apparent speed. Compound selector so it
+   wins regardless of source order against the reverse rule's own duration. */
+.partner-marquee-track.partner-marquee-track-flagship {
+  animation-duration: 26s;
+}
+
 .partner-marquee:hover .partner-marquee-track {
   animation-play-state: paused;
 }
