@@ -23,7 +23,9 @@ type Props = {
 const GLOBE_RADIUS = 2.15;
 const HUB_COLOR = "#BEA2BA";
 const CHAPTER_COLOR = "#F6B78D";
-const INTERNATIONAL_COLOR = "#BEA2BA";
+// A dimmer, greyer lavender. Same family as the hub so it still reads as
+// "not a chapter", but never mistakable for the hub itself.
+const INTERNATIONAL_COLOR = "#9B8FA8";
 const NETWORK_ACCENT = "#F3E28D";
 
 type Coordinate = [number, number];
@@ -290,7 +292,7 @@ export default function NetworkGlobe({ locations, connections }: Props) {
       const isInternational = location.type === "international";
       const color = isHub ? HUB_COLOR : isInternational ? INTERNATIONAL_COLOR : CHAPTER_COLOR;
       const point = toSpherePoint(location.lat, location.lng, GLOBE_RADIUS + 0.085);
-      const glowScale = isHub ? 0.18 : isInternational ? 0.085 : 0.12;
+      const glowScale = isHub ? 0.18 : isInternational ? 0.08 : 0.105;
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({
         map: glowTexture,
         color,
@@ -357,13 +359,31 @@ export default function NetworkGlobe({ locations, connections }: Props) {
     // globe upside down, at which point dragging right spins it left and there
     // is no cue explaining why.
     const MAX_PITCH = 1.25;
+    // Past the stop the globe keeps moving, but each pixel of drag buys
+    // exponentially less of it, and it springs back on release. A hard clamp
+    // reads as the page having frozen; resistance reads as a limit.
+    const MAX_OVERSHOOT = 0.14;
     let globeYaw = 0;
     let globePitch = 0;
     const applyGlobeRotation = (yawDelta: number, pitchDelta: number) => {
       globeYaw += yawDelta;
-      globePitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, globePitch + pitchDelta));
+      const next = globePitch + pitchDelta;
+      const over = Math.abs(next) - MAX_PITCH;
+      globePitch = over <= 0
+        ? next
+        : Math.sign(next) * (MAX_PITCH + MAX_OVERSHOOT * (1 - Math.exp(-over * 2.4)));
       globe.rotation.y = globeYaw;
       globe.rotation.x = globePitch;
+    };
+    // Eases the overshoot away once nothing is holding the globe. Returns true
+    // while it still has distance to travel, so the caller knows to keep drawing.
+    const settleGlobePitch = () => {
+      if (Math.abs(globePitch) <= MAX_PITCH) return false;
+      const target = Math.sign(globePitch) * MAX_PITCH;
+      globePitch += (target - globePitch) * 0.16;
+      if (Math.abs(globePitch - target) < 0.0006) globePitch = target;
+      globe.rotation.x = globePitch;
+      return true;
     };
     const activePointers = new Map<number, THREE.Vector2>();
     let activeLocation = "";
@@ -507,6 +527,14 @@ export default function NetworkGlobe({ locations, connections }: Props) {
       const wasDragging = isDragging;
       activePointers.delete(event.pointerId);
       isDragging = false;
+      // With reduced motion the render loop does not run between events, so
+      // there is no frame in which to spring back. Snap instead, which is the
+      // right behaviour for that preference anyway.
+      if (reducedMotion && activePointers.size === 0 && Math.abs(globePitch) > MAX_PITCH) {
+        globePitch = Math.sign(globePitch) * MAX_PITCH;
+        globe.rotation.x = globePitch;
+        renderer.render(scene, camera);
+      }
       if (renderer.domElement.hasPointerCapture(event.pointerId)) {
         renderer.domElement.releasePointerCapture(event.pointerId);
       }
@@ -554,6 +582,7 @@ export default function NetworkGlobe({ locations, connections }: Props) {
         globeSweep.rotation.y = Math.sin(elapsed * 0.09) * (compactViewport ? 0.32 : 0.44);
         globeSweep.rotation.z = Math.sin(elapsed * 0.075) * 0.028;
       }
+      if (!isDragging && activePointers.size === 0) settleGlobePitch();
       hubGlows.forEach(({ sprite, scale }) => {
         const pulse = 1 + Math.sin(motionElapsed * 2) * 0.11;
         sprite.scale.setScalar(scale * pulse);

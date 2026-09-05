@@ -41,6 +41,10 @@ export type ChapterConnection = [from: string, to: string];
 // "international" entries appear on the globe only. The section is headed
 // "communities across the country", so listing Toronto beside Baltimore in that
 // sentence would contradict the copy above it.
+// Coordinates for the region entries sit at the region's centre rather than at
+// its nearest point to New York. Long Island and New Jersey were within about
+// 45 miles of the city pin, and at globe scale three glow sprites that close
+// merge into one shape instead of reading as three places.
 export const chapterLocations: ChapterLocation[] = [
   {
     name: "New York City",
@@ -57,9 +61,9 @@ export const chapterLocations: ChapterLocation[] = [
   { name: "Chicago", state: "IL", lat: 41.8781, lng: -87.6298, type: "chapter" },
   { name: "Florida", state: "FL", lat: 28.7986, lng: -81.2731, type: "chapter", globeLabel: "Florida" },
   { name: "Houston", state: "TX", lat: 29.7604, lng: -95.3698, type: "chapter" },
-  { name: "Long Island", state: "NY", lat: 40.7891, lng: -73.135, type: "chapter" },
+  { name: "Long Island", state: "NY", lat: 40.9, lng: -72.75, type: "chapter" },
   { name: "Michigan", state: "MI", lat: 42.4806, lng: -83.4755, type: "chapter", globeLabel: "Michigan" },
-  { name: "New Jersey", state: "NJ", lat: 40.3573, lng: -74.6672, type: "chapter", globeLabel: "New Jersey" },
+  { name: "New Jersey", state: "NJ", lat: 40.0583, lng: -74.4057, type: "chapter", globeLabel: "New Jersey" },
   { name: "North Carolina", state: "NC", lat: 35.4088, lng: -80.5795, type: "chapter", globeLabel: "North Carolina" },
   { name: "Salt Lake City", state: "UT", lat: 40.7608, lng: -111.891, type: "chapter" },
   { name: "Virginia", state: "VA", lat: 39.0438, lng: -77.4874, type: "chapter", globeLabel: "Virginia" },
