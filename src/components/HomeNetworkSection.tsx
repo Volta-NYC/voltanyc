@@ -38,6 +38,10 @@ export default function HomeNetworkSection() {
     return () => observer.disconnect();
   }, []);
 
+  // The globe carries international members too; this column does not, because
+  // the sentence above it says "across the country".
+  const listedLocations = chapterLocations.filter((location) => location.type !== "international");
+
   return (
     <section ref={sectionRef} className="home-network-section relative overflow-hidden py-16 sm:py-20 md:py-24">
       {shouldLoadVisuals && <NetworkFluidBackground />}
@@ -53,10 +57,10 @@ export default function HomeNetworkSection() {
 
           <div className="mt-8 border-y border-white/10 py-4" aria-label="Novus chapter locations">
             <p className="font-body text-xs font-bold uppercase tracking-[0.18em] text-white/75">
-              {chapterLocations.length} locations
+              {listedLocations.length} locations
             </p>
             <p className="mt-2 font-body text-sm leading-6 text-white/90">
-              {chapterLocations.map((location, index) => (
+              {listedLocations.map((location, index) => (
                 <span key={location.name}>
                   {index > 0 && <span aria-hidden="true"> · </span>}
                   <span className={location.type === "hub" ? "font-semibold text-white" : "text-white/85"}>
@@ -67,7 +71,7 @@ export default function HomeNetworkSection() {
               ))}
             </p>
             <ul className="sr-only">
-              {chapterLocations.map((location) => (
+              {listedLocations.map((location) => (
                 <li key={location.name}>
                   {location.name}, {location.state}{location.subtitle ? `, ${location.subtitle}` : ""}
                 </li>

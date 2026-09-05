@@ -23,6 +23,7 @@ type Props = {
 const GLOBE_RADIUS = 2.15;
 const HUB_COLOR = "#BEA2BA";
 const CHAPTER_COLOR = "#F6B78D";
+const INTERNATIONAL_COLOR = "#BEA2BA";
 const NETWORK_ACCENT = "#F3E28D";
 
 type Coordinate = [number, number];
@@ -277,14 +278,18 @@ export default function NetworkGlobe({ locations, connections }: Props) {
 
     locations.forEach((location) => {
       const isHub = location.type === "hub";
-      const color = isHub ? HUB_COLOR : CHAPTER_COLOR;
+      // Members abroad are real but few, and no arc runs out to them, so they
+      // read as a quieter tier: lavender rather than peach, and dimmer and
+      // smaller than a domestic pin.
+      const isInternational = location.type === "international";
+      const color = isHub ? HUB_COLOR : isInternational ? INTERNATIONAL_COLOR : CHAPTER_COLOR;
       const point = toSpherePoint(location.lat, location.lng, GLOBE_RADIUS + 0.085);
-      const glowScale = isHub ? 0.18 : 0.12;
+      const glowScale = isHub ? 0.18 : isInternational ? 0.085 : 0.12;
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({
         map: glowTexture,
         color,
         transparent: true,
-        opacity: isHub ? 0.46 : 0.22,
+        opacity: isHub ? 0.46 : isInternational ? 0.16 : 0.22,
         depthWrite: false,
       }));
       glow.position.copy(point.clone().multiplyScalar(1.025));
@@ -292,7 +297,7 @@ export default function NetworkGlobe({ locations, connections }: Props) {
       globe.add(glow);
 
       const marker = new THREE.Mesh(
-        new THREE.SphereGeometry(isHub ? 0.046 : 0.034, 16, 16),
+        new THREE.SphereGeometry(isHub ? 0.046 : isInternational ? 0.024 : 0.034, 16, 16),
         new THREE.MeshBasicMaterial({ color }),
       );
       marker.position.copy(point);
