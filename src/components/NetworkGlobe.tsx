@@ -212,6 +212,12 @@ export default function NetworkGlobe({ locations, connections }: Props) {
     scene.add(globeSweep);
 
     const globe = new THREE.Group();
+    // YXZ applies yaw about world up and pitch about the already-yawed local
+    // right, which is what a turntable does. The previous code composed two
+    // rotateOnWorldAxis calls per frame, and those accumulate roll: after a
+    // little dragging the poles were no longer vertical, so a vertical drag
+    // stopped changing latitude and started tumbling the globe instead.
+    globe.rotation.order = "YXZ";
     globeSweep.add(globe);
 
     const landTexture = createLandTexture();
@@ -347,8 +353,18 @@ export default function NetworkGlobe({ locations, connections }: Props) {
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     const dragStart = new THREE.Vector2();
-    const worldUp = new THREE.Vector3(0, 1, 0);
-    const cameraRight = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    // Latitude stops short of the pole. Letting it pass 90 degrees turns the
+    // globe upside down, at which point dragging right spins it left and there
+    // is no cue explaining why.
+    const MAX_PITCH = 1.25;
+    let globeYaw = 0;
+    let globePitch = 0;
+    const applyGlobeRotation = (yawDelta: number, pitchDelta: number) => {
+      globeYaw += yawDelta;
+      globePitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, globePitch + pitchDelta));
+      globe.rotation.y = globeYaw;
+      globe.rotation.x = globePitch;
+    };
     const activePointers = new Map<number, THREE.Vector2>();
     let activeLocation = "";
     let isDragging = false;
@@ -438,11 +454,10 @@ export default function NetworkGlobe({ locations, connections }: Props) {
             Math.sin(gesture.angle - pinchAngle),
             Math.cos(gesture.angle - pinchAngle),
           );
-          globe.rotateOnWorldAxis(worldUp, angleDelta * 1.65);
+          applyGlobeRotation(angleDelta * 1.65, 0);
         }
         const centerDelta = gesture.center.clone().sub(pinchCenter);
-        globe.rotateOnWorldAxis(worldUp, centerDelta.x * 0.0035);
-        globe.rotateOnWorldAxis(cameraRight, centerDelta.y * 0.0035);
+        applyGlobeRotation(centerDelta.x * 0.0035, centerDelta.y * 0.0035);
         pinchDistance = gesture.distance;
         pinchAngle = gesture.angle;
         pinchCenter.copy(gesture.center);
@@ -454,8 +469,7 @@ export default function NetworkGlobe({ locations, connections }: Props) {
         const deltaX = event.clientX - dragStart.x;
         const deltaY = event.clientY - dragStart.y;
         dragDistance += Math.hypot(deltaX, deltaY);
-        globe.rotateOnWorldAxis(worldUp, deltaX * 0.0045);
-        globe.rotateOnWorldAxis(cameraRight, deltaY * 0.0045);
+        applyGlobeRotation(deltaX * 0.0045, deltaY * 0.0045);
         dragStart.set(event.clientX, event.clientY);
         if (reducedMotion) renderer.render(scene, camera);
         return;
