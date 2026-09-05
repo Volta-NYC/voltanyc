@@ -7,7 +7,7 @@ import { TRACK_NAMES, MARKETING_TRACK, MARKETING_SUBTRACKS } from "@/data";
 import { CLASS_GRADE_OPTIONS } from "@/lib/grades";
 import Combobox from "@/components/Combobox";
 import SelectMenu from "@/components/SelectMenu";
-import { STATE_ABBRS, citiesForState } from "@/lib/usPlaces";
+import { COUNTRIES, STATE_ABBRS, citiesForState } from "@/lib/usPlaces";
 import { EMAIL } from "@/lib/mail";
 import { trackEvent, GA_EVENTS } from "@/lib/analytics";
 
@@ -22,7 +22,7 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 }
 
 const EMPTY: ApplicationFormValues = {
-  fullName: "", email: "", city: "", state: "", chapter: "", schoolName: "",
+  fullName: "", email: "", city: "", state: "", isInternational: false, chapter: "", schoolName: "",
   grade: "", referral: "", referralName: "", tracks: [], marketingSubtrack: "",
   hasResume: null, tools: "", accomplishment: "",
 };
@@ -246,10 +246,12 @@ export default function ApplicationForm({ chapters }: { chapters: string[] }) {
 
       <div className="grid gap-5 sm:grid-cols-2">
         <div>
-          <label htmlFor="application-state" className="block font-body text-sm font-semibold text-n-ink mb-2">State *</label>
+          <label htmlFor="application-state" className="block font-body text-sm font-semibold text-n-ink mb-2">
+            {form.isInternational ? "Country *" : "State *"}
+          </label>
           <SelectMenu
             id="application-state"
-            ariaLabel="State"
+            ariaLabel={form.isInternational ? "Country" : "State"}
             ariaDescribedBy={errors.state ? "application-state-error" : undefined}
             value={form.state}
             onChange={(next) => {
@@ -257,7 +259,7 @@ export default function ApplicationForm({ chapters }: { chapters: string[] }) {
               setForm((p) => ({ ...p, state: next, city: "" }));
               clearError("state");
             }}
-            options={STATE_ABBRS}
+            options={form.isInternational ? COUNTRIES : STATE_ABBRS}
             placeholder="Select"
             invalid={!!errors.state}
           />
@@ -265,18 +267,49 @@ export default function ApplicationForm({ chapters }: { chapters: string[] }) {
         </div>
         <div>
           <label htmlFor="application-city" className="block font-body text-sm font-semibold text-n-ink mb-2">City *</label>
-          <SelectMenu
-            id="application-city"
-            ariaLabel="City"
-            ariaDescribedBy={errors.city ? "application-city-error" : undefined}
-            value={form.city}
-            onChange={(next) => { set("city", next); clearError("city"); }}
-            options={form.state ? citiesForState(form.state) : []}
-            placeholder={form.state ? "Select" : "Pick a state first"}
-            disabled={!form.state}
-            invalid={!!errors.city}
-          />
+          {form.isInternational ? (
+            // No city list exists for 196 countries, so this is the one location
+            // field that has to accept free text. It is under 1% of applicants.
+            <input
+              id="application-city"
+              type="text"
+              aria-label="City"
+              aria-describedby={errors.city ? "application-city-error" : undefined}
+              value={form.city}
+              onChange={(e) => { set("city", e.target.value); clearError("city"); }}
+              className={`novus-input ${errors.city ? "border-red-500" : ""}`}
+              placeholder={form.state ? "Your city" : "Pick a country first"}
+              disabled={!form.state}
+            />
+          ) : (
+            <SelectMenu
+              id="application-city"
+              ariaLabel="City"
+              ariaDescribedBy={errors.city ? "application-city-error" : undefined}
+              value={form.city}
+              onChange={(next) => { set("city", next); clearError("city"); }}
+              options={form.state ? citiesForState(form.state) : []}
+              placeholder={form.state ? "Select" : "Pick a state first"}
+              disabled={!form.state}
+              invalid={!!errors.city}
+            />
+          )}
           <FieldError id="application-city-error" message={errors.city} />
+        </div>
+        <div className="sm:col-span-2 -mt-2">
+          <button
+            type="button"
+            onClick={() => {
+              // Switching modes invalidates both values: state abbreviations and
+              // country names share no vocabulary.
+              setForm((p) => ({ ...p, isInternational: !p.isInternational, state: "", city: "" }));
+              clearError("state");
+              clearError("city");
+            }}
+            className="font-body text-xs text-n-muted underline underline-offset-2 hover:text-n-ink transition-colors"
+          >
+            {form.isInternational ? "Applying from the United States?" : "Not in the United States?"}
+          </button>
         </div>
       </div>
 

@@ -63,6 +63,10 @@ export interface ApplicationFormValues {
   referral: string;
   referralName: string;
   state: string;
+  // When true, `state` holds a country name and `city` is free text, because
+  // no city list exists outside the US. Only the error copy branches on it —
+  // both fields stay required either way.
+  isInternational?: boolean;
   chapter: string;
   tracks: string[];
   marketingSubtrack: string;
@@ -77,8 +81,8 @@ export function validateApplicationForm(
   const errors: Record<string, string> = {};
   addError(errors, "fullName", required(data.fullName, "Full name is required"));
   addError(errors, "email", validEmail(data.email, "Enter a valid email address"));
-  addError(errors, "state", required(data.state, "Select your state"));
-  addError(errors, "city", required(data.city, "Select your city"));
+  addError(errors, "state", required(data.state, data.isInternational ? "Select your country" : "Select your state"));
+  addError(errors, "city", required(data.city, data.isInternational ? "Enter your city" : "Select your city"));
   addError(errors, "chapter", required(data.chapter, "Select a chapter"));
   addError(errors, "schoolName", required(data.schoolName, "School name is required"));
   addError(errors, "grade", required(data.grade, "Select your grade"));
