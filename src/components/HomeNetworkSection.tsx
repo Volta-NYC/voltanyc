@@ -52,7 +52,7 @@ export default function HomeNetworkSection() {
             From New York City to new communities.
           </h2>
           <p className="mt-5 max-w-xl font-body text-base leading-relaxed text-white/85 md:text-lg">
-            Novus began in New York City and is growing through student-led teams in communities across the country.
+            Novus began in New York City and is growing through student-led teams in communities across the country, and a few beyond it.
           </p>
 
           <div className="mt-8 border-y border-white/10 py-4" aria-label="Novus chapter locations">
