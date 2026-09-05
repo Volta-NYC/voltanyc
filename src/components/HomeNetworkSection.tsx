@@ -43,26 +43,26 @@ export default function HomeNetworkSection() {
       {shouldLoadVisuals && <NetworkFluidBackground />}
       <div className="mx-auto grid max-w-7xl items-center gap-6 px-4 sm:gap-8 sm:px-5 md:px-8 lg:grid-cols-[0.8fr_1.2fr] lg:gap-12">
         <AnimatedSection>
-          <p className="font-body text-xs font-bold uppercase tracking-[0.22em] text-n-orange">Our network</p>
+          <p className="font-body text-xs font-bold uppercase tracking-[0.22em] text-white">Our network</p>
           <h2 className="mt-4 font-display text-4xl font-bold leading-tight text-white md:text-5xl">
             From New York City to new communities.
           </h2>
-          <p className="mt-5 max-w-xl font-body text-base leading-relaxed text-white/70 md:text-lg">
+          <p className="mt-5 max-w-xl font-body text-base leading-relaxed text-white/85 md:text-lg">
             Novus began in New York City and is growing through student-led teams in communities across the country.
           </p>
 
           <div className="mt-8 border-y border-white/10 py-4" aria-label="Novus chapter locations">
-            <p className="font-body text-xs font-bold uppercase tracking-[0.18em] text-white/50">
+            <p className="font-body text-xs font-bold uppercase tracking-[0.18em] text-white/75">
               {chapterLocations.length} locations
             </p>
-            <p className="mt-2 font-body text-sm leading-6 text-white/65">
+            <p className="mt-2 font-body text-sm leading-6 text-white/90">
               {chapterLocations.map((location, index) => (
                 <span key={location.name}>
                   {index > 0 && <span aria-hidden="true"> · </span>}
-                  <span className={location.type === "hub" ? "font-semibold text-white" : "text-white/70"}>
+                  <span className={location.type === "hub" ? "font-semibold text-white" : "text-white/85"}>
                     {location.name}
                   </span>
-                  {location.subtitle && <span className="ml-1 text-xs text-n-purple">{location.subtitle}</span>}
+                  {location.subtitle && <span className="ml-1 text-xs text-white/75">{location.subtitle}</span>}
                 </span>
               ))}
             </p>

@@ -10,6 +10,21 @@ export type ChapterLocation = {
 
 export type ChapterConnection = [from: string, to: string];
 
+// Every entry must clear one of two bars: at least two active members in that
+// place, or an official chapter. Both are checkable against the member table
+// and the chapters table, which the previous list was not — it carried Boston,
+// Alabama and Washington on one member or none, while Texas, this network's
+// second-largest state at eleven, appeared only as Austin.
+//
+// City versus state follows where members actually cluster. New Jersey's ten
+// are spread across nine towns with no centre, so it reads as a state; Texas
+// splits into Austin and Houston because both are real concentrations. A single
+// member in a small town is folded into the state name rather than promoted to
+// a pin the town would not recognise.
+//
+// Members in Canada and India are deliberately absent: this section is headed
+// "communities across the country", and quietly widening it to a globe is a
+// copy decision, not a data one.
 export const chapterLocations: ChapterLocation[] = [
   {
     name: "New York City",
@@ -19,12 +34,14 @@ export const chapterLocations: ChapterLocation[] = [
     type: "hub",
   },
   {
-    name: "Boston",
-    state: "MA",
-    lat: 42.3601,
-    lng: -71.0589,
+    name: "Long Island",
+    state: "NY",
+    lat: 40.7891,
+    lng: -73.135,
     type: "chapter",
   },
+  // No members yet. Listed because it is a real chapter in the chapters table
+  // with status "Launching", which is a different claim from member presence.
   {
     name: "Chicago",
     state: "IL",
@@ -33,41 +50,18 @@ export const chapterLocations: ChapterLocation[] = [
     type: "chapter",
   },
   {
-    name: "Alabama",
-    state: "AL",
-    lat: 33.4054,
-    lng: -86.8114,
-    type: "chapter",
-    globeLabel: "Alabama",
-  },
-  {
-    name: "Los Angeles",
-    state: "CA",
-    lat: 34.0522,
-    lng: -118.2437,
+    name: "Austin",
+    state: "TX",
+    lat: 30.2672,
+    lng: -97.7431,
     type: "chapter",
   },
   {
-    name: "Tampa",
-    state: "FL",
-    lat: 27.9506,
-    lng: -82.4572,
+    name: "Houston",
+    state: "TX",
+    lat: 29.7604,
+    lng: -95.3698,
     type: "chapter",
-  },
-  {
-    name: "Baltimore",
-    state: "MD",
-    lat: 39.2904,
-    lng: -76.6122,
-    type: "chapter",
-  },
-  {
-    name: "North Carolina",
-    state: "NC",
-    lat: 35.4088,
-    lng: -80.5795,
-    type: "chapter",
-    globeLabel: "North Carolina",
   },
   {
     name: "New Jersey",
@@ -78,18 +72,20 @@ export const chapterLocations: ChapterLocation[] = [
     globeLabel: "New Jersey",
   },
   {
-    name: "Austin",
-    state: "TX",
-    lat: 30.2672,
-    lng: -97.7431,
+    name: "California",
+    state: "CA",
+    lat: 36.7783,
+    lng: -119.4179,
     type: "chapter",
+    globeLabel: "California",
   },
   {
-    name: "Salt Lake City",
-    state: "UT",
-    lat: 40.7608,
-    lng: -111.891,
+    name: "Florida",
+    state: "FL",
+    lat: 28.7986,
+    lng: -81.2731,
     type: "chapter",
+    globeLabel: "Florida",
   },
   {
     name: "Virginia",
@@ -100,12 +96,34 @@ export const chapterLocations: ChapterLocation[] = [
     globeLabel: "Virginia",
   },
   {
-    name: "Washington",
-    state: "WA",
-    lat: 47.3809,
-    lng: -122.2348,
+    name: "Baltimore",
+    state: "MD",
+    lat: 39.2904,
+    lng: -76.6122,
     type: "chapter",
-    globeLabel: "Washington",
+  },
+  {
+    name: "Salt Lake City",
+    state: "UT",
+    lat: 40.7608,
+    lng: -111.891,
+    type: "chapter",
+  },
+  {
+    name: "Michigan",
+    state: "MI",
+    lat: 42.4806,
+    lng: -83.4755,
+    type: "chapter",
+    globeLabel: "Michigan",
+  },
+  {
+    name: "North Carolina",
+    state: "NC",
+    lat: 35.4088,
+    lng: -80.5795,
+    type: "chapter",
+    globeLabel: "North Carolina",
   },
 ];
 
